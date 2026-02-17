@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 375 375">
+  <rect width="375" height="375" fill="#000000"/>
+
+  <g transform="translate(187.5, 160)" fill="none" stroke="#FFFFFF" stroke-width="4.5" stroke-linecap="square" stroke-linejoin="miter">
+    <!-- D shape -->
+    <!-- Left vertical line -->
+    <line x1="-55" y1="-75" x2="-55" y2="75"/>
+    <!-- Top horizontal + arc + bottom horizontal -->
+    <path d="M -55,-75 L -10,-75 A 75 75 0 0 1 -10,75 L -55,75"/>
+
+    <!-- W/chevron inside the D -->
+    <!-- Left side goes up from bottom-left area, right side goes up then down -->
+    <polyline points="-55,55 -55,10 0,-40 55,10 55,55"/>
+  </g>
+
+  <!-- Texto DW ADMINISTRADORA -->
+  <text x="187.5" y="295"
+        font-family="'Helvetica Neue', Arial, sans-serif"
+        font-size="14"
+        font-weight="300"
+        fill="#FFFFFF"
+        text-anchor="middle"
+        letter-spacing="4.5">DW ADMINISTRADORA</text>
+</svg>

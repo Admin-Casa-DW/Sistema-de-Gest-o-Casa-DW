@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relatórios - Controle Financeiro Casa Rio</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .reports-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .filters-section {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+
+        .filters-title {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .filters-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .filter-group label {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #34495e;
+            font-size: 14px;
+        }
+
+        .filter-group select,
+        .filter-group input {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .filter-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 15px;
+        }
+
+        .results-section {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .results-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .results-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .summary-item {
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .summary-item.total {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+        }
+
+        .summary-item.count {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+        }
+
+        .summary-item.average {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+        }
+
+        .summary-item label {
+            font-size: 12px;
+            color: #666;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .summary-item .value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .report-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        .report-table thead {
+            background: #f8f9fa;
+        }
+
+        .report-table th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #2c3e50;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        .report-table td {
+            padding: 12px;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .report-table tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        .chart-container {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+
+        .chart-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .category-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .back-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .back-button:hover {
+            background: #5a6268;
+        }
+
+        @media print {
+            .filters-section,
+            .back-button,
+            .filter-actions {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="reports-container">
+        <a href="index.html" class="back-button">
+            <i class="fas fa-arrow-left"></i> Voltar ao Dashboard
+        </a>
+
+        <h1 style="margin-bottom: 30px; color: #2c3e50;">
+            <i class="fas fa-chart-bar"></i> Relatórios de Despesas
+        </h1>
+
+        <!-- Filtros -->
+        <div class="filters-section">
+            <div class="filters-title">
+                <i class="fas fa-filter"></i>
+                Filtros de Pesquisa
+            </div>
+
+            <div class="filters-grid">
+                <div class="filter-group">
+                    <label for="filterMonth">Mês</label>
+                    <select id="filterMonth">
+                        <option value="">Todos os Meses</option>
+                        <option value="0">Janeiro</option>
+                        <option value="1">Fevereiro</option>
+                        <option value="2">Março</option>
+                        <option value="3">Abril</option>
+                        <option value="4">Maio</option>
+                        <option value="5">Junho</option>
+                        <option value="6">Julho</option>
+                        <option value="7">Agosto</option>
+                        <option value="8">Setembro</option>
+                        <option value="9">Outubro</option>
+                        <option value="10">Novembro</option>
+                        <option value="11">Dezembro</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="filterCategory">Categoria</label>
+                    <select id="filterCategory">
+                        <option value="">Todas as Categorias</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="filterSupplier">Fornecedor</label>
+                    <select id="filterSupplier">
+                        <option value="">Todos os Fornecedores</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="filterPaymentMethod">Método de Pagamento</label>
+                    <select id="filterPaymentMethod">
+                        <option value="">Todos os Métodos</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="filterDateFrom">Data Início</label>
+                    <input type="date" id="filterDateFrom">
+                </div>
+
+                <div class="filter-group">
+                    <label for="filterDateTo">Data Fim</label>
+                    <input type="date" id="filterDateTo">
+                </div>
+            </div>
+
+            <div class="filter-actions">
+                <button onclick="clearFilters()" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> Limpar Filtros
+                </button>
+                <button onclick="applyFilters()" class="btn btn-primary">
+                    <i class="fas fa-search"></i> Aplicar Filtros
+                </button>
+                <button onclick="exportReport()" class="btn btn-success">
+                    <i class="fas fa-file-excel"></i> Exportar Excel
+                </button>
+                <button onclick="window.print()" class="btn btn-secondary">
+                    <i class="fas fa-print"></i> Imprimir
+                </button>
+            </div>
+        </div>
+
+        <!-- Resumo -->
+        <div class="results-section">
+            <div class="results-header">
+                <div class="results-title">Resumo do Período</div>
+            </div>
+
+            <div class="results-summary">
+                <div class="summary-item total">
+                    <label>Total de Despesas</label>
+                    <div class="value" id="summaryTotal">R$ 0,00</div>
+                </div>
+                <div class="summary-item count">
+                    <label>Quantidade de Lançamentos</label>
+                    <div class="value" id="summaryCount">0</div>
+                </div>
+                <div class="summary-item average">
+                    <label>Valor Médio</label>
+                    <div class="value" id="summaryAverage">R$ 0,00</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabela de Resultados -->
+        <div class="results-section">
+            <div class="results-header">
+                <div class="results-title">Despesas Detalhadas</div>
+                <div id="resultsInfo" style="color: #666; font-size: 14px;"></div>
+            </div>
+
+            <div id="tableContainer">
+                <table class="report-table">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Mês</th>
+                            <th>Categoria</th>
+                            <th>Fornecedor</th>
+                            <th>Descrição</th>
+                            <th>Método Pagamento</th>
+                            <th style="text-align: right;">Valor</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reportTableBody">
+                        <tr>
+                            <td colspan="7" class="no-data">
+                                <i class="fas fa-inbox" style="font-size: 48px; margin-bottom: 10px;"></i>
+                                <p>Nenhuma despesa encontrada. Aplique os filtros para visualizar os dados.</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Gráfico por Categoria -->
+        <div class="chart-container">
+            <div class="chart-title">
+                <i class="fas fa-chart-pie"></i> Despesas por Categoria
+            </div>
+            <canvas id="categoryChart" height="100"></canvas>
+        </div>
+
+        <!-- Gráfico Mensal -->
+        <div class="chart-container">
+            <div class="chart-title">
+                <i class="fas fa-chart-line"></i> Evolução Mensal
+            </div>
+            <canvas id="monthlyChart" height="100"></canvas>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="relatorios.js"></script>
+</body>
+</html>

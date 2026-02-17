@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle Financeiro Casa Rio</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Login Page -->
+    <div id="loginPage" class="login-page">
+        <div class="login-container">
+            <div class="login-header">
+                <img src="logo-dw.svg" alt="DW Administradora" class="login-logo">
+                <h1>Controle Financeiro Casa Rio</h1>
+                <p>Faça login para acessar o sistema</p>
+            </div>
+            <form id="loginForm" class="login-form">
+                <div class="form-group">
+                    <label for="loginUsername">
+                        <i class="fas fa-user"></i> Usuário
+                    </label>
+                    <input type="text" id="loginUsername" required placeholder="Digite seu usuário" autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">
+                        <i class="fas fa-lock"></i> Senha
+                    </label>
+                    <input type="password" id="loginPassword" required placeholder="Digite sua senha" autocomplete="current-password">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">
+                    <i class="fas fa-sign-in-alt"></i> Entrar
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="mainApp" class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <img src="logo-dw.svg" alt="DW Administradora" class="header-logo">
+                <h1>Controle Financeiro Casa Rio</h1>
+            </div>
+            <div id="userInfo" class="user-info"></div>
+            <div class="header-actions">
+                <button id="frotaBtn" class="btn btn-secondary" onclick="window.location.href='frota.html'">
+                    <i class="fas fa-car"></i> Frota
+                </button>
+                <button id="reportsBtn" class="btn btn-secondary" onclick="window.location.href='relatorios.html'">
+                    <i class="fas fa-chart-bar"></i> Relatórios
+                </button>
+                <button id="exportBtn" class="btn btn-secondary">
+                    <i class="fas fa-download"></i> Exportar
+                </button>
+                <button id="settingsBtn" class="btn btn-secondary">
+                    <i class="fas fa-cog"></i> Parâmetros
+                </button>
+            </div>
+        </header>
+
+        <!-- Dashboard Summary -->
+        <div class="dashboard">
+            <div class="summary-card income">
+                <div class="card-icon"><i class="fas fa-arrow-up"></i></div>
+                <div class="card-content">
+                    <h3>Entradas</h3>
+                    <p class="amount" id="totalIncome">R$ 0,00</p>
+                </div>
+            </div>
+
+            <div class="summary-card expense">
+                <div class="card-icon"><i class="fas fa-arrow-down"></i></div>
+                <div class="card-content">
+                    <h3>Despesas Totais</h3>
+                    <p class="amount" id="totalExpense">R$ 0,00</p>
+                </div>
+            </div>
+
+            <div class="summary-card balance">
+                <div class="card-icon"><i class="fas fa-wallet"></i></div>
+                <div class="card-content">
+                    <h3>Saldo Restante</h3>
+                    <p class="amount" id="balance">R$ 0,00</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <div class="charts-container">
+            <div class="chart-box">
+                <h3><i class="fas fa-chart-pie"></i> Despesas por Categoria</h3>
+                <canvas id="categoryChart"></canvas>
+            </div>
+            <div class="chart-box">
+                <h3><i class="fas fa-chart-bar"></i> Evolução Mensal</h3>
+                <canvas id="monthlyChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Main Content Grid -->
+        <div class="content-grid">
+            <!-- Expenses Section -->
+            <section class="section expenses-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-receipt"></i> Despesas do Mês</h2>
+                    <button id="addExpenseBtn" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Nova Despesa
+                    </button>
+                </div>
+
+                <!-- Filters -->
+                <div class="filters">
+                    <input type="text" id="searchExpense" placeholder="Buscar despesa..." class="search-input">
+                    <select id="filterCategory" class="filter-select">
+                        <option value="">Todas as Categorias</option>
+                    </select>
+                    <select id="filterSupplier" class="filter-select">
+                        <option value="">Todos os Fornecedores</option>
+                    </select>
+                    <select id="filterMonth" class="filter-select">
+                        <option value="">Todos os Meses</option>
+                        <option value="1">Janeiro</option>
+                        <option value="2">Fevereiro</option>
+                        <option value="3">Março</option>
+                        <option value="4">Abril</option>
+                        <option value="5">Maio</option>
+                        <option value="6">Junho</option>
+                        <option value="7">Julho</option>
+                        <option value="8">Agosto</option>
+                        <option value="9">Setembro</option>
+                        <option value="10">Outubro</option>
+                        <option value="11">Novembro</option>
+                        <option value="12">Dezembro</option>
+                    </select>
+                    <select id="filterYear" class="filter-select">
+                        <option value="">Todos os Anos</option>
+                    </select>
+                </div>
+
+                <!-- Expenses Table -->
+                <div class="table-container">
+                    <table class="data-table" id="expensesTable">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Descrição</th>
+                                <th>Categoria</th>
+                                <th>Fornecedor</th>
+                                <th>Valor</th>
+                                <th>Pagamento</th>
+                                <th>Vencimento</th>
+                                <th>Anexo</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="expensesBody">
+                            <!-- Expenses will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Income Section -->
+            <section class="section income-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-hand-holding-usd"></i> Entradas do Mês</h2>
+                    <button id="addIncomeBtn" class="btn btn-success">
+                        <i class="fas fa-plus"></i> Nova Entrada
+                    </button>
+                </div>
+
+                <div class="table-container">
+                    <table class="data-table" id="incomeTable">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Descrição</th>
+                                <th>Valor</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="incomeBody">
+                            <!-- Income will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Category Summary -->
+            <section class="section category-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-tags"></i> Resumo por Categoria</h2>
+                </div>
+                <div id="categorySummary" class="category-summary">
+                    <!-- Category summary will be loaded here -->
+                </div>
+            </section>
+
+            <!-- Notes Section -->
+            <section class="section notes-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-sticky-note"></i> Notas</h2>
+                </div>
+                <textarea id="monthNotes" class="notes-textarea" placeholder="Adicione notas sobre o mês..."></textarea>
+                <button id="saveNotesBtn" class="btn btn-secondary">
+                    <i class="fas fa-save"></i> Salvar Notas
+                </button>
+            </section>
+        </div>
+    </div>
+
+    <!-- Modal for Adding/Editing Expense -->
+    <div id="expenseModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="expenseModalTitle"><i class="fas fa-receipt"></i> Nova Despesa</h2>
+                <span class="close">&times;</span>
+            </div>
+            <form id="expenseForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="expenseDate">Data de Lançamento *</label>
+                        <input type="date" id="expenseDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="expenseDueDate">Data de Vencimento</label>
+                        <input type="date" id="expenseDueDate">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="expenseDescription">Descrição *</label>
+                    <input type="text" id="expenseDescription" required placeholder="Ex: Almoço, Gasolina, Conta de luz">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="expenseCategory">Categoria *</label>
+                        <select id="expenseCategory" required>
+                            <option value="">Selecione...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="expenseSupplier">Fornecedor *</label>
+                        <select id="expenseSupplier" required>
+                            <option value="">Selecione...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="expenseAmount">Valor *</label>
+                        <input type="number" id="expenseAmount" step="0.01" required placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label for="expensePaymentMethod">Forma de Pagamento *</label>
+                        <select id="expensePaymentMethod" required>
+                            <option value="">Selecione...</option>
+                            <option value="Cartão de Crédito">Cartão de Crédito</option>
+                            <option value="Reembolso">Reembolso</option>
+                            <option value="Conta Corrente">Conta Corrente</option>
+                            <option value="Outros">Outros</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="expenseReceipt">Nota Fiscal / Recibo (opcional)</label>
+                    <div class="receipt-upload-container">
+                        <input type="file" id="expenseReceipt" accept="image/*,application/pdf" multiple>
+                        <button type="button" id="captureReceiptBtn" class="btn btn-secondary">
+                            <i class="fas fa-camera"></i> Capturar com Câmera
+                        </button>
+                    </div>
+                    <div id="receiptPreview" class="receipt-preview"></div>
+                    <p class="help-text">Aceita imagens (JPG, PNG) e PDF. Múltiplos arquivos serão combinados em um único PDF.</p>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelExpense">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for Adding/Editing Income -->
+    <div id="incomeModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="incomeModalTitle"><i class="fas fa-hand-holding-usd"></i> Nova Entrada</h2>
+                <span class="close">&times;</span>
+            </div>
+            <form id="incomeForm">
+                <div class="form-group">
+                    <label for="incomeDate">Data *</label>
+                    <input type="date" id="incomeDate" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="incomeDescription">Descrição *</label>
+                    <input type="text" id="incomeDescription" required placeholder="Ex: Salário, Freelance, Reembolso">
+                </div>
+
+                <div class="form-group">
+                    <label for="incomeAmount">Valor *</label>
+                    <input type="number" id="incomeAmount" step="0.01" required placeholder="0.00">
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelIncome">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Settings/Parameters Modal -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content settings-modal">
+            <div class="modal-header">
+                <h2><i class="fas fa-cog"></i> Configurações e Parâmetros</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="settings-content">
+                <!-- Tabs -->
+                <div class="settings-tabs">
+                    <button class="tab-btn active" data-tab="categories">
+                        <i class="fas fa-tags"></i> Categorias
+                    </button>
+                    <button class="tab-btn" data-tab="suppliers">
+                        <i class="fas fa-store"></i> Fornecedores
+                    </button>
+                    <button class="tab-btn" data-tab="payments">
+                        <i class="fas fa-credit-card"></i> Formas de Pagamento
+                    </button>
+                    <button class="tab-btn" data-tab="years">
+                        <i class="fas fa-calendar"></i> Anos
+                    </button>
+                    <button class="tab-btn" data-tab="users">
+                        <i class="fas fa-users"></i> Usuários
+                    </button>
+                </div>
+
+                <!-- Categories Tab -->
+                <div class="tab-content active" id="categories-tab">
+                    <div class="param-section">
+                        <div class="param-header">
+                            <h3>Gerenciar Categorias</h3>
+                            <button class="btn btn-primary btn-sm" onclick="addNewParameter('category')">
+                                <i class="fas fa-plus"></i> Adicionar
+                            </button>
+                        </div>
+                        <div class="param-list" id="categoriesList"></div>
+                    </div>
+                </div>
+
+                <!-- Suppliers Tab -->
+                <div class="tab-content" id="suppliers-tab">
+                    <div class="param-section">
+                        <div class="param-header">
+                            <h3>Gerenciar Fornecedores</h3>
+                            <button class="btn btn-primary btn-sm" onclick="addNewParameter('supplier')">
+                                <i class="fas fa-plus"></i> Adicionar
+                            </button>
+                        </div>
+                        <div class="param-list" id="suppliersList"></div>
+                    </div>
+                </div>
+
+                <!-- Payment Methods Tab -->
+                <div class="tab-content" id="payments-tab">
+                    <div class="param-section">
+                        <div class="param-header">
+                            <h3>Gerenciar Formas de Pagamento</h3>
+                            <button class="btn btn-primary btn-sm" onclick="addNewParameter('payment')">
+                                <i class="fas fa-plus"></i> Adicionar
+                            </button>
+                        </div>
+                        <div class="param-list" id="paymentsList"></div>
+                    </div>
+                </div>
+
+                <!-- Years Tab -->
+                <div class="tab-content" id="years-tab">
+                    <div class="param-section">
+                        <div class="param-header">
+                            <h3>Gerenciar Anos</h3>
+                            <button class="btn btn-primary btn-sm" onclick="addNewParameter('year')">
+                                <i class="fas fa-plus"></i> Adicionar
+                            </button>
+                        </div>
+                        <div class="param-list" id="yearsList"></div>
+                    </div>
+                </div>
+
+                <!-- Users Tab -->
+                <div class="tab-content" id="users-tab">
+                    <div class="param-section">
+                        <div class="param-header">
+                            <h3>Gerenciar Usuários</h3>
+                            <button class="btn btn-primary btn-sm" onclick="openAddUserModal()">
+                                <i class="fas fa-plus"></i> Adicionar
+                            </button>
+                        </div>
+                        <div class="param-list" id="usersList"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit User Modal -->
+    <div id="userModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="userModalTitle"><i class="fas fa-user-plus"></i> Novo Usuário</h2>
+                <span class="close">&times;</span>
+            </div>
+            <form id="userForm">
+                <div class="form-group">
+                    <label for="userName">Nome Completo *</label>
+                    <input type="text" id="userName" required placeholder="Ex: João Silva">
+                </div>
+                <div class="form-group">
+                    <label for="userUsername">Usuário *</label>
+                    <input type="text" id="userUsername" required placeholder="Ex: joao.silva" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label for="userPassword">Senha *</label>
+                    <input type="password" id="userPassword" required placeholder="Digite a senha" autocomplete="new-password">
+                </div>
+                <div class="form-group">
+                    <label for="userRole">Nível de Permissão *</label>
+                    <select id="userRole" required>
+                        <option value="">Selecione...</option>
+                        <option value="admin">Administrador (Acesso Total)</option>
+                        <option value="normal">Normal (Apenas Visualização)</option>
+                    </select>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelUser">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="script.js"></script>
+    <script src="settings.js"></script>
+    <script src="auth.js"></script>
+</body>
+</html>
