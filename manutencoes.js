@@ -5,24 +5,28 @@
 const API_URL_MANUT = window.APP_CONFIG?.API_URL || null;
 
 let maintenances = [];
+let maintenanceTypes = []; // lista gerenciada de tipos
 let calendarDate = new Date();
 let editingId = null;
 let viewingId = null;
-let pendingFiles = []; // files staged for upload
+let pendingFiles = [];
 
-// Known areas and types (auto-populated from data + suggestions)
-let knownAreas = ['Sala', 'Cozinha', 'Banheiro', 'Quarto', 'Garagem', 'Área externa', 'Piscina', 'Jardim', 'Lavanderia', 'Escritório', 'Geral'];
-let knownTypes = ['Pintura', 'Hidráulica', 'Elétrica', 'Ar-condicionado', 'Dedetização', 'Limpeza', 'Reforma', 'Manutenção preventiva', 'Instalação', 'Reparo'];
+// Áreas sugeridas (não gerenciadas, só sugestão no form)
+const KNOWN_AREAS = ['Sala', 'Cozinha', 'Banheiro', 'Quarto', 'Garagem', 'Área externa', 'Piscina', 'Jardim', 'Lavanderia', 'Escritório', 'Geral'];
+
+// Tipos padrão (carregados do backend; estes são os defaults se não houver nenhum salvo)
+const DEFAULT_TYPES = ['Pintura', 'Hidráulica', 'Elétrica', 'Ar-condicionado', 'Dedetização', 'Limpeza', 'Reforma', 'Manutenção preventiva', 'Instalação', 'Reparo'];
 
 // ===== INIT =====
 document.addEventListener('DOMContentLoaded', async function() {
-    await loadMaintenances();
+    await loadData();
     updateDashboard();
     renderAlerts();
     renderCalendar();
     renderTable();
     populateFilterOptions();
     setDefaultDate();
+    renderTypesList();
     console.log('✅ Manutenções carregadas');
 });
 
@@ -32,12 +36,13 @@ function setDefaultDate() {
 }
 
 // ===== DATA LOAD/SAVE =====
-async function loadMaintenances() {
+async function loadData() {
     try {
         const userId = sessionStorage.getItem('user-id');
         if (!userId || !API_URL_MANUT) {
             console.warn('⚠️ Sem userId ou API_URL — usando dados locais');
             maintenances = JSON.parse(sessionStorage.getItem('manut_local') || '[]');
+            maintenanceTypes = JSON.parse(sessionStorage.getItem('manut_types') || 'null') || [...DEFAULT_TYPES];
             return;
         }
 
@@ -46,36 +51,46 @@ async function loadMaintenances() {
 
         const data = await response.json();
         maintenances = data.maintenance || [];
-        console.log(`✅ ${maintenances.length} manutenções carregadas`);
+        maintenanceTypes = (data.maintenanceTypes && data.maintenanceTypes.length > 0)
+            ? data.maintenanceTypes
+            : [...DEFAULT_TYPES];
+
+        console.log(`✅ ${maintenances.length} manutenções, ${maintenanceTypes.length} tipos carregados`);
     } catch (error) {
-        console.error('❌ Erro ao carregar manutenções:', error);
+        console.error('❌ Erro ao carregar:', error);
         maintenances = [];
+        maintenanceTypes = [...DEFAULT_TYPES];
     }
 }
 
 async function saveMaintenances() {
+    return saveToAPI({ maintenance: maintenances });
+}
+
+async function saveTypes() {
+    return saveToAPI({ maintenanceTypes });
+}
+
+async function saveToAPI(payload) {
     try {
         const userId = sessionStorage.getItem('user-id');
         if (!userId || !API_URL_MANUT) {
-            sessionStorage.setItem('manut_local', JSON.stringify(maintenances));
+            if (payload.maintenance !== undefined) sessionStorage.setItem('manut_local', JSON.stringify(maintenances));
+            if (payload.maintenanceTypes !== undefined) sessionStorage.setItem('manut_types', JSON.stringify(maintenanceTypes));
             return true;
         }
 
         const response = await fetch(`${API_URL_MANUT}/api/sync`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId, maintenance: maintenances })
+            body: JSON.stringify({ userId, ...payload })
         });
 
-        if (response.ok) {
-            console.log('✅ Manutenções salvas');
-            return true;
-        } else {
-            console.error('❌ Erro ao salvar:', response.status);
-            return false;
-        }
+        if (response.ok) return true;
+        console.error('❌ Erro ao salvar:', response.status);
+        return false;
     } catch (error) {
-        console.error('❌ Erro ao salvar manutenções:', error);
+        console.error('❌ Erro ao salvar:', error);
         return false;
     }
 }
@@ -84,12 +99,11 @@ async function saveMaintenances() {
 function getEffectiveStatus(m) {
     if (m.status === 'concluida') return 'concluida';
     if (m.status === 'em_andamento') return 'em_andamento';
-    // Check if overdue: nextDate < today and not concluded
     if (m.nextDate) {
         const next = new Date(m.nextDate);
         const today = new Date();
-        today.setHours(0,0,0,0);
-        if (next < today && m.status !== 'concluida') return 'vencida';
+        today.setHours(0, 0, 0, 0);
+        if (next < today) return 'vencida';
     }
     return m.status || 'pendente';
 }
@@ -110,7 +124,6 @@ function updateDashboard() {
         else if (s === 'vencida') overdue++;
         else pending++;
 
-        // Cost for current year
         const execYear = m.date ? parseInt(m.date.substring(0, 4)) : null;
         if (execYear === currentYear && m.cost) {
             cost += parseFloat(m.cost || 0);
@@ -137,13 +150,9 @@ function renderAlerts() {
     maintenances.forEach(m => {
         if (m.status === 'concluida') return;
         if (!m.nextDate) return;
-
         const next = new Date(m.nextDate);
-        if (next < today) {
-            overdue.push(m);
-        } else if (next <= in30) {
-            soon.push(m);
-        }
+        if (next < today) overdue.push(m);
+        else if (next <= in30) soon.push(m);
     });
 
     const section = document.getElementById('alertsSection');
@@ -163,7 +172,7 @@ function renderAlerts() {
                 <div class="alert-icon overdue"><i class="fas fa-exclamation-triangle"></i></div>
                 <div class="alert-info">
                     <strong>${m.type} — ${m.area}</strong>
-                    <small>Vencida em ${formatDate(m.nextDate)} · ${m.supplier || 'Sem fornecedor'}</small>
+                    <small>Próxima manutenção vencida em ${formatDate(m.nextDate)} · ${m.supplier || 'Sem fornecedor'}</small>
                 </div>
                 <button class="btn btn-secondary" style="margin-left:auto;font-size:12px;" onclick="openEditModal('${m.id}')">Editar</button>
             </div>`;
@@ -176,7 +185,7 @@ function renderAlerts() {
                 <div class="alert-icon soon"><i class="fas fa-clock"></i></div>
                 <div class="alert-info">
                     <strong>${m.type} — ${m.area}</strong>
-                    <small>Em ${days} dia(s) — ${formatDate(m.nextDate)} · ${m.supplier || 'Sem fornecedor'}</small>
+                    <small>Próxima previsão em ${days} dia(s) — ${formatDate(m.nextDate)} · ${m.supplier || 'Sem fornecedor'}</small>
                 </div>
             </div>`;
     });
@@ -184,7 +193,7 @@ function renderAlerts() {
     list.innerHTML = html;
 }
 
-// ===== CALENDAR =====
+// ===== CALENDAR — somente data de execução =====
 function renderCalendar() {
     const year = calendarDate.getFullYear();
     const month = calendarDate.getMonth();
@@ -195,8 +204,6 @@ function renderCalendar() {
     document.getElementById('calendarTitle').textContent = `${MONTH_NAMES[month]} ${year}`;
 
     const grid = document.getElementById('calendarGrid');
-
-    // Day headers
     const days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
     let html = days.map(d => `<div class="calendar-header">${d}</div>`).join('');
 
@@ -207,31 +214,23 @@ function renderCalendar() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Events indexed by day
+    // Indexar eventos pela data de EXECUÇÃO apenas
     const eventsMap = {};
-
     maintenances.forEach(m => {
-        // Show on execution date
-        if (m.date) {
-            const d = new Date(m.date);
-            if (d.getFullYear() === year && d.getMonth() === month) {
-                const day = d.getDate();
-                if (!eventsMap[day]) eventsMap[day] = [];
-                eventsMap[day].push({ m, field: 'date' });
-            }
-        }
-        // Show on next date
-        if (m.nextDate && m.status !== 'concluida') {
-            const d = new Date(m.nextDate);
-            if (d.getFullYear() === year && d.getMonth() === month) {
-                const day = d.getDate();
-                if (!eventsMap[day]) eventsMap[day] = [];
-                eventsMap[day].push({ m, field: 'nextDate' });
-            }
+        if (!m.date) return;
+        // Usar new Date com timezone local para evitar off-by-one
+        const parts = m.date.split('-');
+        const execYear = parseInt(parts[0]);
+        const execMonth = parseInt(parts[1]) - 1;
+        const execDay = parseInt(parts[2]);
+
+        if (execYear === year && execMonth === month) {
+            if (!eventsMap[execDay]) eventsMap[execDay] = [];
+            eventsMap[execDay].push(m);
         }
     });
 
-    // Previous month filler
+    // Dias do mês anterior
     for (let i = firstDay - 1; i >= 0; i--) {
         html += `<div class="calendar-day other-month"><div class="calendar-day-num">${daysInPrev - i}</div></div>`;
     }
@@ -242,13 +241,14 @@ function renderCalendar() {
         let eventsHtml = '';
 
         if (eventsMap[day]) {
-            eventsMap[day].slice(0, 3).forEach(({ m, field }) => {
-                const s = field === 'nextDate' ? getEffectiveStatus(m) : (m.status || 'pendente');
-                const label = field === 'nextDate' ? `📅 ${m.type}` : `🔧 ${m.type}`;
-                eventsHtml += `<div class="calendar-event status-${s}" title="${m.type} — ${m.area}" onclick="openViewModal('${m.id}')">${label}</div>`;
+            eventsMap[day].slice(0, 3).forEach(m => {
+                const s = getEffectiveStatus(m);
+                eventsHtml += `<div class="calendar-event status-${s}" title="${m.type} — ${m.area}" onclick="openViewModal('${m.id}')">
+                    <i class="fas fa-tools" style="font-size:9px;"></i> ${m.type}
+                </div>`;
             });
             if (eventsMap[day].length > 3) {
-                eventsHtml += `<div style="font-size:10px;color:#999;">+${eventsMap[day].length - 3} mais</div>`;
+                eventsHtml += `<div style="font-size:10px;color:#999;padding:1px 4px;">+${eventsMap[day].length - 3} mais</div>`;
             }
         }
 
@@ -258,7 +258,7 @@ function renderCalendar() {
         </div>`;
     }
 
-    // Next month filler
+    // Dias do próximo mês
     const totalCells = firstDay + daysInMonth;
     const remaining = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
     for (let i = 1; i <= remaining; i++) {
@@ -292,18 +292,17 @@ function renderTable() {
         return true;
     });
 
-    // Sort by nextDate, then by date desc
     filtered.sort((a, b) => {
-        const na = a.nextDate || a.date || '';
-        const nb = b.nextDate || b.date || '';
-        return na.localeCompare(nb);
+        const na = a.date || '';
+        const nb = b.date || '';
+        return nb.localeCompare(na); // mais recente primeiro
     });
 
     const tbody = document.getElementById('manutTableBody');
 
     if (filtered.length === 0) {
         tbody.innerHTML = `<tr><td colspan="8" class="no-data">
-            <i class="fas fa-tools" style="font-size:40px;margin-bottom:10px;"></i>
+            <i class="fas fa-tools" style="font-size:40px;margin-bottom:10px;display:block;"></i>
             <p>Nenhuma manutenção encontrada.</p>
         </td></tr>`;
         return;
@@ -331,9 +330,10 @@ function renderTable() {
 
 function populateFilterOptions() {
     const areas = [...new Set(maintenances.map(m => m.area).filter(Boolean))].sort();
-    const types = [...new Set(maintenances.map(m => m.type).filter(Boolean))].sort();
 
+    // Reset e repopula filtros
     const areaSelect = document.getElementById('filterArea');
+    areaSelect.innerHTML = '<option value="">Todas as Áreas</option>';
     areas.forEach(a => {
         const opt = document.createElement('option');
         opt.value = a; opt.textContent = a;
@@ -341,31 +341,29 @@ function populateFilterOptions() {
     });
 
     const typeSelect = document.getElementById('filterType');
-    types.forEach(t => {
+    typeSelect.innerHTML = '<option value="">Todos os Tipos</option>';
+    maintenanceTypes.sort().forEach(t => {
         const opt = document.createElement('option');
         opt.value = t; opt.textContent = t;
         typeSelect.appendChild(opt);
     });
 
-    // Datalists for form
-    const allAreas = [...new Set([...knownAreas, ...areas])].sort();
-    const allTypes = [...new Set([...knownTypes, ...types])].sort();
-
+    // Datalists para o formulário
+    const allAreas = [...new Set([...KNOWN_AREAS, ...areas])].sort();
     document.getElementById('areasList').innerHTML = allAreas.map(a => `<option value="${a}">`).join('');
-    document.getElementById('typesList').innerHTML = allTypes.map(t => `<option value="${t}">`).join('');
+    document.getElementById('typesList').innerHTML = maintenanceTypes.sort().map(t => `<option value="${t}">`).join('');
 }
 
 // ===== TABS =====
-function switchTab(tab) {
+function switchTab(tab, btn) {
     document.querySelectorAll('.manut-tab').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.manut-panel').forEach(p => p.classList.remove('active'));
-
-    const tabMap = { agenda: 'tabAgenda', lista: 'tabLista' };
+    const tabMap = { agenda: 'tabAgenda', lista: 'tabLista', tipos: 'tabTipos' };
     document.getElementById(tabMap[tab]).classList.add('active');
-    event.currentTarget.classList.add('active');
+    btn.classList.add('active');
 }
 
-// ===== MODAL: NEW/EDIT =====
+// ===== MODAL: NOVA/EDITAR MANUTENÇÃO =====
 function openManutModal() {
     editingId = null;
     pendingFiles = [];
@@ -398,7 +396,6 @@ function openEditModal(id) {
     document.getElementById('manutDesc').value = m.desc || '';
     document.getElementById('manutLaunchExpense').value = m.launchExpense || 'nao';
 
-    // Show existing files
     renderExistingFiles(m.files || []);
 
     const recFields = document.getElementById('recurrenceFields');
@@ -471,26 +468,22 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // ===== FILE UPLOAD =====
 function handleFileSelect(event) {
-    const files = Array.from(event.target.files);
-    files.forEach(file => {
-        pendingFiles.push(file);
-    });
+    Array.from(event.target.files).forEach(file => pendingFiles.push(file));
     renderPendingFiles();
-    event.target.value = ''; // reset input
+    event.target.value = '';
 }
 
 function renderPendingFiles() {
     const preview = document.getElementById('uploadPreview');
-    // Keep existing files HTML (from edit mode) + new pending
-    const existingHtml = preview.querySelectorAll('.upload-preview-item');
-    // Only add new pending files at the end
-    const pending = pendingFiles.map((f, i) => {
+    preview.querySelectorAll('[data-pending]').forEach(el => el.remove());
+
+    const html = pendingFiles.map((f, i) => {
         const isImage = f.type.startsWith('image/');
         if (isImage) {
             const url = URL.createObjectURL(f);
             return `<div class="upload-preview-item" data-pending="${i}">
                 <img src="${url}" alt="${f.name}">
-                <button class="remove-file" onclick="removePendingFile(${i})" title="Remover">×</button>
+                <button class="remove-file" onclick="removePendingFile(${i})">×</button>
                 <div class="file-name">${f.name}</div>
             </div>`;
         } else {
@@ -498,14 +491,12 @@ function renderPendingFiles() {
                 <div style="padding:8px;background:#f5f5f5;border-radius:5px;font-size:12px;max-width:70px;word-break:break-all;">
                     <i class="fas fa-file-pdf" style="color:#e74c3c;"></i><br>${f.name}
                 </div>
-                <button class="remove-file" onclick="removePendingFile(${i})" title="Remover">×</button>
+                <button class="remove-file" onclick="removePendingFile(${i})">×</button>
             </div>`;
         }
     });
 
-    // Remove old pending previews
-    preview.querySelectorAll('[data-pending]').forEach(el => el.remove());
-    preview.insertAdjacentHTML('beforeend', pending.join(''));
+    preview.insertAdjacentHTML('beforeend', html.join(''));
 }
 
 function removePendingFile(index) {
@@ -524,9 +515,7 @@ async function uploadPendingFiles(userId) {
                 body: JSON.stringify({ file: base64, filename: file.name, userId })
             });
             const result = await response.json();
-            if (result.success) {
-                uploaded.push({ name: file.name, url: result.url, publicId: result.publicId });
-            }
+            if (result.success) uploaded.push({ name: file.name, url: result.url, publicId: result.publicId });
         } catch (err) {
             console.error('Erro ao enviar arquivo:', err);
         }
@@ -543,7 +532,7 @@ function fileToBase64(file) {
     });
 }
 
-// ===== SAVE =====
+// ===== SAVE MANUTENÇÃO =====
 async function saveManut(event) {
     event.preventDefault();
 
@@ -554,7 +543,6 @@ async function saveManut(event) {
     try {
         const userId = sessionStorage.getItem('user-id') || 'admin';
 
-        // Upload pending files
         let newFiles = [];
         if (pendingFiles.length > 0 && API_URL_MANUT) {
             showToast('Enviando arquivos...', 'warning');
@@ -574,7 +562,6 @@ async function saveManut(event) {
         const desc = document.getElementById('manutDesc').value.trim();
         const launchExpense = document.getElementById('manutLaunchExpense').value;
 
-        // Get existing files if editing
         let existingFiles = [];
         if (editingId) {
             const existing = maintenances.find(x => x.id === editingId);
@@ -598,22 +585,15 @@ async function saveManut(event) {
             updatedAt: new Date().toISOString()
         };
 
-        if (!record.createdAt) {
-            record.createdAt = new Date().toISOString();
-        }
-
         if (editingId) {
             const idx = maintenances.findIndex(x => x.id === editingId);
-            // Keep original createdAt
-            const original = maintenances[idx];
-            record.createdAt = original.createdAt;
+            record.createdAt = maintenances[idx].createdAt;
             maintenances[idx] = record;
         } else {
             record.createdAt = new Date().toISOString();
             maintenances.push(record);
         }
 
-        // If launching as expense and cost > 0
         if (launchExpense === 'sim' && cost && parseFloat(cost) > 0) {
             await launchAsExpense(record, userId);
         }
@@ -643,13 +623,10 @@ async function saveManut(event) {
 
 async function launchAsExpense(record, userId) {
     try {
-        // Get current expenses from API
         const resp = await fetch(`${API_URL_MANUT}/api/sync/${userId}`);
         const data = await resp.json();
 
         const monthIndex = record.date ? parseInt(record.date.substring(5, 7)) - 1 : new Date().getMonth();
-
-        // Rebuild expenses object
         const expensesByMonth = {};
         for (let i = 0; i < 12; i++) expensesByMonth[i] = [];
 
@@ -665,7 +642,6 @@ async function launchAsExpense(record, userId) {
             });
         }
 
-        // Add new expense
         expensesByMonth[monthIndex].push({
             id: generateId(),
             date: record.date,
@@ -677,7 +653,6 @@ async function launchAsExpense(record, userId) {
             year: record.date ? parseInt(record.date.substring(0, 4)) : new Date().getFullYear()
         });
 
-        // Convert back to API format
         const expensesAPI = [];
         for (let i = 0; i < 12; i++) {
             if (expensesByMonth[i] && expensesByMonth[i].length > 0) {
@@ -705,17 +680,16 @@ async function launchAsExpense(record, userId) {
     }
 }
 
-// ===== DELETE =====
+// ===== DELETE MANUTENÇÃO =====
 async function deleteManut(id) {
     if (!confirm('Deseja excluir esta manutenção?')) return;
-
     maintenances = maintenances.filter(m => m.id !== id);
     await saveMaintenances();
-
     updateDashboard();
     renderAlerts();
     renderCalendar();
     renderTable();
+    populateFilterOptions();
     showToast('Manutenção excluída.', 'success');
 }
 
@@ -741,7 +715,7 @@ function openViewModal(id) {
         filesHtml = '<span style="color:#999;font-size:13px;">Nenhum arquivo</span>';
     }
 
-    const html = `
+    document.getElementById('viewContent').innerHTML = `
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 20px;">
             <div><strong style="color:#7f8c8d;font-size:12px;">TIPO</strong><br>${m.type}</div>
             <div><strong style="color:#7f8c8d;font-size:12px;">ÁREA/CÔMODO</strong><br>${m.area}</div>
@@ -755,8 +729,6 @@ function openViewModal(id) {
             <div style="grid-column:1/-1;"><strong style="color:#7f8c8d;font-size:12px;">FOTOS / DOCUMENTOS</strong><br>${filesHtml}</div>
         </div>
     `;
-
-    document.getElementById('viewContent').innerHTML = html;
     document.getElementById('viewModal').classList.add('active');
 }
 
@@ -766,8 +738,105 @@ function closeViewModal() {
 }
 
 function editFromView() {
+    const id = viewingId;
     closeViewModal();
-    if (viewingId) openEditModal(viewingId);
+    if (id) openEditModal(id);
+}
+
+// ===== TIPOS DE MANUTENÇÃO — CRUD =====
+function renderTypesList() {
+    const tbody = document.getElementById('typesTableBody');
+    if (!tbody) return;
+
+    const sorted = [...maintenanceTypes].sort((a, b) => a.localeCompare(b));
+
+    if (sorted.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="2" class="no-data" style="padding:20px;text-align:center;color:#999;">Nenhum tipo cadastrado.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = sorted.map(t => `
+        <tr>
+            <td>${t}</td>
+            <td style="white-space:nowrap;">
+                <button class="action-btn edit" onclick="editType('${escapeAttr(t)}')" title="Renomear"><i class="fas fa-edit"></i></button>
+                <button class="action-btn delete" onclick="deleteType('${escapeAttr(t)}')" title="Excluir"><i class="fas fa-trash"></i></button>
+            </td>
+        </tr>
+    `).join('');
+
+    // Atualiza datalist do formulário
+    document.getElementById('typesList').innerHTML = sorted.map(t => `<option value="${t}">`).join('');
+}
+
+function addType() {
+    const input = document.getElementById('newTypeName');
+    const name = input.value.trim();
+    if (!name) { showToast('Digite o nome do tipo.', 'warning'); return; }
+
+    if (maintenanceTypes.map(t => t.toLowerCase()).includes(name.toLowerCase())) {
+        showToast('Este tipo já existe.', 'warning');
+        return;
+    }
+
+    maintenanceTypes.push(name);
+    input.value = '';
+    saveTypes().then(ok => {
+        if (ok) {
+            showToast('Tipo adicionado!', 'success');
+            renderTypesList();
+            populateFilterOptions();
+        } else {
+            showToast('Erro ao salvar.', 'error');
+        }
+    });
+}
+
+function editType(oldName) {
+    const newName = prompt('Renomear tipo:', oldName);
+    if (!newName || newName.trim() === oldName) return;
+    const trimmed = newName.trim();
+
+    if (maintenanceTypes.map(t => t.toLowerCase()).includes(trimmed.toLowerCase())) {
+        showToast('Este tipo já existe.', 'warning');
+        return;
+    }
+
+    // Renomear em todas as manutenções
+    maintenances.forEach(m => { if (m.type === oldName) m.type = trimmed; });
+    const idx = maintenanceTypes.indexOf(oldName);
+    if (idx !== -1) maintenanceTypes[idx] = trimmed;
+
+    Promise.all([saveTypes(), saveMaintenances()]).then(() => {
+        showToast('Tipo renomeado!', 'success');
+        renderTypesList();
+        renderTable();
+        populateFilterOptions();
+    });
+}
+
+function deleteType(name) {
+    const inUse = maintenances.some(m => m.type === name);
+    const msg = inUse
+        ? `O tipo "${name}" está em uso em ${maintenances.filter(m => m.type === name).length} manutenção(ões). Deseja excluir mesmo assim?`
+        : `Excluir o tipo "${name}"?`;
+
+    if (!confirm(msg)) return;
+
+    maintenanceTypes = maintenanceTypes.filter(t => t !== name);
+    saveTypes().then(ok => {
+        if (ok) {
+            showToast('Tipo excluído.', 'success');
+            renderTypesList();
+            populateFilterOptions();
+        } else {
+            showToast('Erro ao salvar.', 'error');
+        }
+    });
+}
+
+function escapeAttr(str) {
+    return str.replace(/'/g, "\\'");
 }
 
 // ===== HELPERS =====
