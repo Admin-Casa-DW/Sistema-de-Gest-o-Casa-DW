@@ -170,9 +170,18 @@ const CloudStorage = {
             data.fleet = apiData.fleet;
         }
 
-        // Converter anos (Parâmetros)
+        // Converter parâmetros: anos, categorias, fornecedores, formas de pagamento
         if (apiData.years && Array.isArray(apiData.years) && apiData.years.length > 0) {
             data.years = apiData.years;
+        }
+        if (apiData.categories && Array.isArray(apiData.categories) && apiData.categories.length > 0) {
+            data.categories = apiData.categories;
+        }
+        if (apiData.suppliers && Array.isArray(apiData.suppliers) && apiData.suppliers.length > 0) {
+            data.suppliers = apiData.suppliers;
+        }
+        if (apiData.paymentMethods && Array.isArray(apiData.paymentMethods) && apiData.paymentMethods.length > 0) {
+            data.paymentMethods = apiData.paymentMethods;
         }
 
         return data;
@@ -187,7 +196,10 @@ const CloudStorage = {
             notes: [],
             systemUsers: financialData.users || [],
             fleet: financialData.fleet || { vehicles: [], updateDate: '' },
-            years: financialData.years || [2024, 2025, 2026]
+            years: financialData.years || [2024, 2025, 2026],
+            categories: financialData.categories || [],
+            suppliers: financialData.suppliers || [],
+            paymentMethods: financialData.paymentMethods || []
         };
 
         // Converter despesas
