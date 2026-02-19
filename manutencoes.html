@@ -621,6 +621,9 @@
             <button class="manut-tab" onclick="switchTab('tipos', this)">
                 <i class="fas fa-tags"></i> Tipos de Manutenção
             </button>
+            <button class="manut-tab" onclick="switchTab('areas', this)">
+                <i class="fas fa-map-marker-alt"></i> Áreas/Cômodos
+            </button>
         </div>
 
         <!-- Tab: Agenda -->
@@ -724,6 +727,50 @@
                             </tr>
                         </thead>
                         <tbody id="typesTableBody">
+                            <tr>
+                                <td colspan="2" class="no-data" style="padding:30px;text-align:center;color:#999;">
+                                    Carregando...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Áreas/Cômodos -->
+        <div id="tabAreas" class="manut-panel">
+            <div class="table-section">
+                <div class="table-header">
+                    <div class="table-title"><i class="fas fa-map-marker-alt"></i> Áreas / Cômodos</div>
+                </div>
+                <p style="color:#7f8c8d;font-size:13px;margin-bottom:20px;">
+                    Cadastre as áreas ou cômodos da residência disponíveis para seleção no formulário. Ao renomear uma área, todos os registros existentes serão atualizados automaticamente.
+                </p>
+
+                <!-- Formulário de adição -->
+                <div style="display:flex;gap:10px;margin-bottom:25px;align-items:flex-end;">
+                    <div class="form-group" style="flex:1;margin:0;">
+                        <label style="font-size:13px;font-weight:600;color:#34495e;">Nova Área</label>
+                        <input type="text" id="newAreaName" placeholder="Ex: Sala, Cozinha, Banheiro..."
+                            style="padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;"
+                            onkeydown="if(event.key==='Enter'){event.preventDefault();addArea();}">
+                    </div>
+                    <button class="btn btn-primary" onclick="addArea()" style="white-space:nowrap;">
+                        <i class="fas fa-plus"></i> Adicionar
+                    </button>
+                </div>
+
+                <!-- Tabela de áreas -->
+                <div style="overflow-x:auto;">
+                    <table class="manut-table">
+                        <thead>
+                            <tr>
+                                <th>Nome da Área/Cômodo</th>
+                                <th style="width:100px;">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="areasTableBody">
                             <tr>
                                 <td colspan="2" class="no-data" style="padding:30px;text-align:center;color:#999;">
                                     Carregando...
