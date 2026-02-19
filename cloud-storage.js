@@ -18,6 +18,9 @@ if (USER_ID) {
 
 // Objeto de armazenamento que usa APENAS a nuvem
 const CloudStorage = {
+    // Flag: indica se loadAll() foi chamado com sucesso (evita saveAll antes de carregar)
+    _dataLoaded: false,
+
     // Carregar TODOS os dados da nuvem
     async loadAll() {
         const currentUserId = window.getUserId ? window.getUserId() : USER_ID;
@@ -33,17 +36,22 @@ const CloudStorage = {
 
             if (!response.ok) {
                 console.log('ℹ️ Nenhum dado na nuvem ainda (primeira vez)');
+                this._dataLoaded = true;
                 return this.createEmptyData();
             }
 
             const data = await response.json();
             console.log('✅ Dados carregados da nuvem');
 
+            // Marcar que os dados foram carregados com sucesso
+            this._dataLoaded = true;
+
             // Converter formato da API para formato do sistema
             return this.convertFromAPI(data);
 
         } catch (error) {
             console.error('❌ Erro ao carregar da nuvem:', error);
+            this._dataLoaded = true;
             return this.createEmptyData();
         }
     },
@@ -54,6 +62,13 @@ const CloudStorage = {
 
         if (!currentUserId || !CLOUD_ENABLED) {
             console.error('❌ Cloud storage não configurado ou USER_ID não definido');
+            return false;
+        }
+
+        // Proteção: não salvar antes de carregar os dados da nuvem
+        // Isso evita sobrescrever dados existentes com arrays vazios durante a inicialização
+        if (!this._dataLoaded) {
+            console.warn('⚠️ saveAll bloqueado: dados ainda não foram carregados da nuvem. Aguarde loadAll() completar.');
             return false;
         }
 
@@ -238,6 +253,8 @@ const CloudStorage = {
 window.setCloudUserId = function(userId) {
     USER_ID = userId;
     sessionStorage.setItem('user-id', userId);
+    // Resetar flag de carregamento para novo usuário/sessão
+    CloudStorage._dataLoaded = false;
     console.log('👤 USER_ID definido:', userId);
 };
 
