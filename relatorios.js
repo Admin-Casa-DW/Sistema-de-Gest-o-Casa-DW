@@ -13,20 +13,12 @@ const MONTHS = [
 // Carregar dados do CloudStorage (MongoDB)
 async function loadData() {
     try {
-        // Obter userId do sessionStorage (definido no login)
-        const currentUserStr = sessionStorage.getItem('currentUser');
-        if (!currentUserStr) {
-            console.warn('⚠️ Usuário não logado');
-            initEmptyData();
-            return;
-        }
-
-        const currentUser = JSON.parse(currentUserStr);
-        const userId = currentUser.username;
+        // Obter userId do sessionStorage (mesma chave usada pelo cloud-storage.js)
+        const userId = sessionStorage.getItem('user-id');
         const apiUrl = window.APP_CONFIG?.API_URL;
 
-        if (!apiUrl || !userId) {
-            console.warn('⚠️ API ou userId não configurado');
+        if (!userId || !apiUrl) {
+            console.warn('⚠️ Usuário não logado ou API não configurada');
             initEmptyData();
             return;
         }
