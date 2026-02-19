@@ -897,7 +897,13 @@
 
     <div id="toastEl" class="toast"></div>
 
+    <script>
+        if (!sessionStorage.getItem("currentUser")) {
+            window.location.href = "index.html";
+        }
+    </script>
     <script src="config.js"></script>
     <script src="manutencoes.js"></script>
 </body>
 </html>
+
