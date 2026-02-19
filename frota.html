@@ -979,8 +979,14 @@
         </div>
     </div>
 
+    <script>
+        if (!sessionStorage.getItem("currentUser")) {
+            window.location.href = "index.html";
+        }
+    </script>
     <script src="config.js"></script>
     <script src="cloud-storage.js"></script>
     <script src="frota.js"></script>
 </body>
 </html>
+
