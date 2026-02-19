@@ -361,16 +361,12 @@ async function saveFleetDataToCloud() {
             return;
         }
 
-        // Salvar diretamente apenas a frota, sem recarregar tudo
+        // Salvar diretamente apenas a frota, sem sobrescrever outros dados
         const response = await fetch(`${apiUrl}/api/sync`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 userId: userId,
-                expenses: [],
-                income: [],
-                notes: [],
-                systemUsers: [],
                 fleet: fleetData
             })
         });
