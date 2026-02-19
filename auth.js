@@ -5,16 +5,61 @@ document.addEventListener('DOMContentLoaded', function() {
     checkAuthentication();
 });
 
-function checkAuthentication() {
-    const currentUser = localStorage.getItem('currentUser');
+async function checkAuthentication() {
+    const currentUser = sessionStorage.getItem('currentUser');
 
     if (!currentUser) {
         showLoginPage();
-    } else {
-        financialData.currentUser = JSON.parse(currentUser);
-        showMainApp();
-        updateUIForUserRole();
+        return;
     }
+
+    const user = JSON.parse(currentUser);
+    financialData.currentUser = user;
+
+    // Restaurar USER_ID para cloud storage
+    if (window.setCloudUserId) {
+        window.setCloudUserId(user.username);
+    }
+
+    showMainApp();
+    await carregarDadosEInicializar();
+}
+
+// Carrega dados da nuvem e inicializa a interface
+async function carregarDadosEInicializar() {
+    showPageLoading();
+    try {
+        if (window.loadFromLocalStorage) {
+            await window.loadFromLocalStorage();
+        }
+        updateUIForUserRole();
+        if (window.populateSelects) window.populateSelects();
+        if (window.renderCurrentMonth) window.renderCurrentMonth();
+        if (window.initializeCharts) window.initializeCharts();
+    } catch (error) {
+        console.error('❌ Erro ao carregar dados:', error);
+        updateUIForUserRole();
+    } finally {
+        hidePageLoading();
+    }
+}
+
+function showPageLoading() {
+    if (document.getElementById('pageLoadingOverlay')) return;
+    const overlay = document.createElement('div');
+    overlay.id = 'pageLoadingOverlay';
+    overlay.innerHTML = `
+        <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin fa-3x"></i>
+            <p>Carregando dados...</p>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+}
+
+function hidePageLoading() {
+    const overlay = document.getElementById('pageLoadingOverlay');
+    if (overlay) overlay.remove();
 }
 
 function showLoginPage() {
@@ -26,7 +71,6 @@ function showMainApp() {
     document.getElementById('loginPage').style.display = 'none';
     document.getElementById('mainApp').style.display = 'block';
 
-    // Update user info in header
     const userInfo = document.getElementById('userInfo');
     if (userInfo && financialData.currentUser) {
         userInfo.innerHTML = `
@@ -44,88 +88,70 @@ function showMainApp() {
 function updateUIForUserRole() {
     const isAdmin = financialData.currentUser && financialData.currentUser.role === 'admin';
 
-    // Disable buttons for normal users
-    const restrictedButtons = [
-        'addExpenseBtn',
-        'addIncomeBtn',
-        'saveNotesBtn',
-        'settingsBtn'
-    ];
-
+    const restrictedButtons = ['addExpenseBtn', 'addIncomeBtn', 'saveNotesBtn', 'settingsBtn'];
     restrictedButtons.forEach(btnId => {
         const btn = document.getElementById(btnId);
         if (btn) {
-            if (!isAdmin) {
-                btn.disabled = true;
-                btn.style.opacity = '0.5';
-                btn.style.cursor = 'not-allowed';
-                btn.title = 'Apenas administradores podem realizar esta ação';
-            } else {
-                btn.disabled = false;
-                btn.style.opacity = '1';
-                btn.style.cursor = 'pointer';
-                btn.title = '';
-            }
+            btn.disabled = !isAdmin;
+            btn.style.opacity = isAdmin ? '1' : '0.5';
+            btn.style.cursor = isAdmin ? 'pointer' : 'not-allowed';
+            btn.title = isAdmin ? '' : 'Apenas administradores podem realizar esta ação';
         }
     });
 
-    // Hide action buttons in tables for normal users
     if (!isAdmin) {
-        const style = document.createElement('style');
-        style.id = 'userRoleStyles';
-        style.textContent = `
-            .action-buttons { display: none !important; }
-            .data-table th:last-child,
-            .data-table td:last-child { display: none !important; }
-        `;
-        document.head.appendChild(style);
+        if (!document.getElementById('userRoleStyles')) {
+            const style = document.createElement('style');
+            style.id = 'userRoleStyles';
+            style.textContent = `
+                .action-buttons { display: none !important; }
+                .data-table th:last-child,
+                .data-table td:last-child { display: none !important; }
+            `;
+            document.head.appendChild(style);
+        }
     } else {
         const existingStyle = document.getElementById('userRoleStyles');
-        if (existingStyle) {
-            existingStyle.remove();
-        }
+        if (existingStyle) existingStyle.remove();
     }
 }
 
-function handleLogin(event) {
+async function handleLogin(event) {
     event.preventDefault();
 
-    const username = document.getElementById('loginUsername').value;
+    const username = document.getElementById('loginUsername').value.trim();
     const password = document.getElementById('loginPassword').value;
 
-    // Find user
     const user = financialData.users.find(u =>
         u.username === username && u.password === password
     );
 
-    if (user) {
-        // Save to localStorage (without password)
-        const userSession = {
-            username: user.username,
-            name: user.name,
-            role: user.role
-        };
-
-        localStorage.setItem('currentUser', JSON.stringify(userSession));
-        financialData.currentUser = userSession;
-
-        showMainApp();
-        updateUIForUserRole();
-        showToast(`Bem-vindo, ${user.name}!`, 'success');
-
-        // Reset form
-        document.getElementById('loginForm').reset();
-    } else {
+    if (!user) {
         showToast('Usuário ou senha incorretos!', 'error');
+        return;
     }
+
+    const userSession = { username: user.username, name: user.name, role: user.role };
+    sessionStorage.setItem('currentUser', JSON.stringify(userSession));
+    financialData.currentUser = userSession;
+
+    if (window.setCloudUserId) {
+        window.setCloudUserId(user.username);
+    }
+
+    document.getElementById('loginForm').reset();
+
+    showMainApp();
+    await carregarDadosEInicializar();
+    showToast(`Bem-vindo, ${user.name}!`, 'success');
 }
 
 function logout() {
     if (confirm('Deseja realmente sair?')) {
-        localStorage.removeItem('currentUser');
+        sessionStorage.removeItem('currentUser');
+        sessionStorage.removeItem('user-id');
         financialData.currentUser = null;
         showLoginPage();
-        showToast('Logout realizado com sucesso!', 'success');
     }
 }
 

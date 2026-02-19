@@ -117,17 +117,57 @@ let fleetData = null;
 let currentHistoryIndex = -1;
 
 // ---- Initialization ----
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     console.log('DOM loaded, initializing frota...');
 
-    loadFleetData();
+    // Mostrar loading enquanto carrega
+    showFrotaLoading();
+
+    await loadFleetData();
     populateFilters();
     renderVehicles();
     updateStatusCards();
     setupEventListeners();
 
+    hideFrotaLoading();
+
     console.log('Frota initialized successfully');
 });
+
+function showFrotaLoading() {
+    const container = document.querySelector('.frota-container');
+    if (container && !document.getElementById('frotaLoadingOverlay')) {
+        const overlay = document.createElement('div');
+        overlay.id = 'frotaLoadingOverlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            backdrop-filter: blur(4px);
+        `;
+        overlay.innerHTML = `
+            <div style="text-align: center; color: white;">
+                <i class="fas fa-spinner fa-spin fa-3x" style="margin-bottom: 20px;"></i>
+                <p style="font-size: 18px; font-weight: 500;">Carregando frota...</p>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+    }
+}
+
+function hideFrotaLoading() {
+    const overlay = document.getElementById('frotaLoadingOverlay');
+    if (overlay) {
+        overlay.remove();
+    }
+}
 
 function setupEventListeners() {
     console.log('Setting up event listeners...');
@@ -256,25 +296,42 @@ function setupEventListeners() {
     console.log('Event listeners setup complete');
 }
 
-function loadFleetData() {
-    const saved = localStorage.getItem(FLEET_STORAGE_KEY);
-    if (saved) {
-        try {
-            fleetData = JSON.parse(saved);
-            // Ensure all vehicles have kmHistory
-            fleetData.vehicles.forEach(v => {
-                if (!v.kmHistory) v.kmHistory = [];
-            });
-        } catch (e) {
+async function loadFleetData() {
+    try {
+        console.log('☁️ Carregando dados da frota da nuvem...');
+
+        if (window.CloudStorage) {
+            const cloudData = await window.CloudStorage.loadAll();
+
+            if (cloudData && cloudData.fleet && cloudData.fleet.vehicles && cloudData.fleet.vehicles.length > 0) {
+                fleetData = cloudData.fleet;
+                // Ensure all vehicles have kmHistory
+                fleetData.vehicles.forEach(v => {
+                    if (!v.kmHistory) v.kmHistory = [];
+                });
+                console.log('✅ Dados da frota carregados da nuvem!');
+            } else {
+                console.log('ℹ️ Nenhum dado de frota na nuvem, restaurando dados iniciais');
+                fleetData = JSON.parse(JSON.stringify(initialFleetData));
+
+                // Salvar dados iniciais na nuvem automaticamente
+                console.log('💾 Salvando dados iniciais da frota na nuvem...');
+                await saveFleetDataSilent();
+                console.log('✅ Dados iniciais da frota restaurados na nuvem!');
+            }
+        } else {
+            console.warn('⚠️ CloudStorage não disponível, usando dados iniciais');
             fleetData = JSON.parse(JSON.stringify(initialFleetData));
         }
-    } else {
+    } catch (e) {
+        console.error('❌ Erro ao carregar frota:', e);
         fleetData = JSON.parse(JSON.stringify(initialFleetData));
     }
+
     document.getElementById('updateDate').textContent = 'ATUALIZADO: ' + fleetData.updateDate;
 }
 
-function saveFleetData() {
+async function saveFleetData() {
     const now = new Date();
     const day = String(now.getDate()).padStart(2, '0');
     const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -282,10 +339,51 @@ function saveFleetData() {
     fleetData.updateDate = `${day}/${month}/${year}`;
     document.getElementById('updateDate').textContent = 'ATUALIZADO: ' + fleetData.updateDate;
 
+    await saveFleetDataToCloud();
+}
+
+// Salvar silenciosamente (sem atualizar data) - usado para restaurar dados iniciais
+async function saveFleetDataSilent() {
+    await saveFleetDataToCloud();
+}
+
+// Função interna para salvar na nuvem (apenas frota, sem recarregar tudo)
+async function saveFleetDataToCloud() {
     try {
-        localStorage.setItem(FLEET_STORAGE_KEY, JSON.stringify(fleetData));
+        console.log('☁️ Salvando dados da frota na nuvem...');
+
+        const userId = window.getUserId ? window.getUserId() : null;
+        const apiUrl = window.APP_CONFIG?.API_URL;
+
+        if (!userId || !apiUrl) {
+            console.error('❌ USER_ID ou API_URL não definido');
+            alert('Erro: usuário não identificado. Faça login novamente.');
+            return;
+        }
+
+        // Salvar diretamente apenas a frota, sem recarregar tudo
+        const response = await fetch(`${apiUrl}/api/sync`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userId: userId,
+                expenses: [],
+                income: [],
+                notes: [],
+                systemUsers: [],
+                fleet: fleetData
+            })
+        });
+
+        if (response.ok) {
+            console.log('✅ Dados da frota salvos na nuvem!');
+        } else {
+            console.error('❌ Erro ao salvar dados da frota:', response.status);
+            alert('Erro ao salvar dados da frota na nuvem.');
+        }
     } catch (e) {
-        alert('Erro ao salvar dados da frota. O armazenamento local pode estar cheio.');
+        console.error('❌ Erro ao salvar frota:', e);
+        alert('Erro ao salvar dados da frota.');
     }
 }
 

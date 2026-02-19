@@ -381,7 +381,7 @@ function handleUserSubmit(e) {
                 name: user.name,
                 role: user.role
             };
-            localStorage.setItem('currentUser', JSON.stringify(userSession));
+            sessionStorage.setItem('currentUser', JSON.stringify(userSession));
             financialData.currentUser = userSession;
             updateUIForUserRole();
 

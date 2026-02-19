@@ -775,10 +775,34 @@ form {
     align-items: center;
     justify-content: center;
     font-size: 14px;
+    z-index: 2;
 }
 
 .receipt-preview-item .remove-receipt:hover {
     background: #dc2626;
+}
+
+.receipt-preview-item .edit-receipt {
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    z-index: 2;
+    transition: background 0.2s ease;
+}
+
+.receipt-preview-item .edit-receipt:hover {
+    background: var(--primary-dark);
 }
 
 .help-text {
@@ -1247,4 +1271,225 @@ form {
     .data-table td {
         padding: 8px 5px;
     }
+}
+
+
+/* Sync Modal Styles */
+.sync-info {
+    background: #e3f2fd;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 25px;
+    border-left: 4px solid #2196f3;
+}
+
+.sync-info p {
+    margin: 0;
+    color: #1565c0;
+    font-size: 14px;
+}
+
+.sync-options {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+
+.sync-option {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 10px;
+    border: 2px solid #e9ecef;
+}
+
+.sync-option h3 {
+    color: #2c3e50;
+    font-size: 18px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sync-option p {
+    color: #6c757d;
+    font-size: 14px;
+    margin-bottom: 15px;
+}
+
+.sync-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.sync-warning {
+    background: #fff3cd;
+    padding: 15px;
+    border-radius: 8px;
+    margin-top: 25px;
+    border-left: 4px solid #ffc107;
+}
+
+.sync-warning p {
+    margin: 0;
+    color: #856404;
+    font-size: 14px;
+}
+
+#qrCodeImage {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    display: inline-block;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+@media (max-width: 768px) {
+    .sync-actions {
+        flex-direction: column;
+    }
+
+    .sync-actions button {
+        width: 100%;
+    }
+}
+
+/* Image Cropper Modal */
+.modal-cropper .modal-content {
+    max-width: 90vw;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.cropper-container-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 400px;
+}
+
+.cropper-controls {
+    display: flex;
+    gap: 8px;
+    padding: 12px;
+    background: var(--light);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.cropper-controls .btn-sm {
+    padding: 8px 12px;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.cropper-image-container {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: #f0f0f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cropper-image-container img {
+    max-width: 100%;
+    max-height: 100%;
+    display: block;
+}
+
+/* Cropper.js overrides for mobile */
+.cropper-container {
+    direction: ltr;
+    font-size: 0;
+    line-height: 0;
+    position: relative;
+    touch-action: none;
+    user-select: none;
+}
+
+.cropper-wrap-box,
+.cropper-canvas,
+.cropper-drag-box,
+.cropper-crop-box,
+.cropper-modal {
+    bottom: 0;
+    left: 0;
+    position: absolute;
+    right: 0;
+    top: 0;
+}
+
+@media (max-width: 768px) {
+    .modal-cropper .modal-content {
+        max-width: 95vw;
+        max-height: 95vh;
+        margin: 2.5vh auto;
+    }
+
+    .cropper-container-wrapper {
+        min-height: 300px;
+    }
+
+    .cropper-controls {
+        gap: 6px;
+        padding: 8px;
+    }
+
+    .cropper-controls .btn-sm {
+        padding: 6px 10px;
+        font-size: 12px;
+    }
+
+    .cropper-controls .btn-sm i {
+        font-size: 11px;
+    }
+}
+
+/* Page Loading Overlay */
+#pageLoadingOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    backdrop-filter: blur(4px);
+}
+
+#pageLoadingOverlay .loading-spinner {
+    text-align: center;
+    color: white;
+}
+
+#pageLoadingOverlay .loading-spinner i {
+    margin-bottom: 20px;
+    color: var(--primary);
+    filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.5));
+}
+
+#pageLoadingOverlay .loading-spinner p {
+    font-size: 18px;
+    font-weight: 500;
+    margin: 0;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* Loading spinner animation */
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.fa-spin {
+    animation: spin 1s linear infinite;
 }
