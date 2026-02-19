@@ -170,6 +170,11 @@ const CloudStorage = {
             data.fleet = apiData.fleet;
         }
 
+        // Converter anos (Parâmetros)
+        if (apiData.years && Array.isArray(apiData.years) && apiData.years.length > 0) {
+            data.years = apiData.years;
+        }
+
         return data;
     },
 
@@ -181,7 +186,8 @@ const CloudStorage = {
             income: [],
             notes: [],
             systemUsers: financialData.users || [],
-            fleet: financialData.fleet || { vehicles: [], updateDate: '' }
+            fleet: financialData.fleet || { vehicles: [], updateDate: '' },
+            years: financialData.years || [2024, 2025, 2026]
         };
 
         // Converter despesas

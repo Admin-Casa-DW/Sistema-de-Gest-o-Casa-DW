@@ -48,7 +48,7 @@ async function loadData() {
 
         // Preencher com dados da API
         // A API retorna expenses como array de {month, year, items}
-        const yearsSet = new Set();
+        const yearsFromExpenses = new Set();
         if (data.expenses && Array.isArray(data.expenses)) {
             data.expenses.forEach(monthData => {
                 const monthIndex = monthData.month;
@@ -68,13 +68,18 @@ async function loadData() {
                         ...itemsWithYear
                     ];
 
-                    if (year) yearsSet.add(year);
+                    if (year) yearsFromExpenses.add(year);
                 }
             });
         }
 
-        // Armazenar anos disponíveis ordenados
-        availableYears = Array.from(yearsSet).sort((a, b) => b - a); // Decrescente
+        // Usar anos da tabela de Parâmetros (data.years) como fonte principal
+        // Se não houver anos salvos, usar os anos extraídos das despesas como fallback
+        if (data.years && Array.isArray(data.years) && data.years.length > 0) {
+            availableYears = [...data.years].sort((a, b) => b - a); // Decrescente
+        } else {
+            availableYears = Array.from(yearsFromExpenses).sort((a, b) => b - a);
+        }
 
         // Coletar fornecedores únicos das despesas
         const suppliersSet = new Set();
