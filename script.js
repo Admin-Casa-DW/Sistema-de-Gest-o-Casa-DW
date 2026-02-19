@@ -48,22 +48,40 @@ let monthlyChart = null;
 
 // Receipt files storage
 let currentReceiptFiles = [];
+let cropperInstance = null;
+let currentCropperFileIndex = null;
+let isEditingExistingReceipt = false;
 
-// Initialize Application
+// Initialize Application (ASYNC para carregar da nuvem)
 document.addEventListener('DOMContentLoaded', function() {
-    initializeApp();
+    // Apenas setup de event listeners
+    // Dados serão carregados no login
+    setupEventListeners();
+    console.log('✅ Event listeners configurados');
 });
 
-function initializeApp() {
+async function initializeApp() {
     try {
-        loadFromLocalStorage();
+        console.log('🚀 Inicializando aplicação...');
+
+        // Aguardar carregamento dos dados da nuvem
+        await loadFromLocalStorage();
+
+        // Atualizar UI de permissões após carregar dados
+        if (typeof updateUIForUserRole === 'function') {
+            updateUIForUserRole();
+            console.log('✅ Permissões de usuário atualizadas');
+        }
+
         setupEventListeners();
         populateSelects();
         renderCurrentMonth();
         initializeCharts();
-        console.log('App initialized successfully');
+
+        console.log('✅ App inicializado com sucesso!');
     } catch (error) {
-        console.error('Error initializing app:', error);
+        console.error('❌ Erro ao inicializar:', error);
+        showToast('Erro ao carregar dados', 'error');
     }
 }
 
@@ -938,73 +956,78 @@ function exportData() {
 }
 
 // Local Storage
-function saveToLocalStorage() {
+// NOVO: Salvar direto na nuvem (sem localStorage)
+async function saveToLocalStorage() {
     try {
-        const dataToSave = JSON.stringify(financialData);
-        const sizeInMB = (dataToSave.length / (1024 * 1024)).toFixed(2);
-        console.log(`Tamanho dos dados: ${sizeInMB} MB`);
+        console.log('☁️ Salvando dados na nuvem...');
 
-        localStorage.setItem('financialData', dataToSave);
-        console.log('Dados salvos com sucesso no localStorage');
-    } catch (e) {
-        if (e.name === 'QuotaExceededError') {
-            console.error('ERRO: LocalStorage cheio!');
-
-            // Tentar remover PDFs das despesas para economizar espaço
-            const dataCopy = JSON.parse(JSON.stringify(financialData));
-            let removedPDFs = 0;
-
-            Object.keys(dataCopy.expenses).forEach(monthIndex => {
-                const expenses = dataCopy.expenses[monthIndex] || [];
-                expenses.forEach(expense => {
-                    if (expense.receiptPDF) {
-                        delete expense.receiptPDF;
-                        removedPDFs++;
-                    }
-                });
-            });
-
-            if (removedPDFs > 0) {
-                console.log(`Removendo ${removedPDFs} PDFs para liberar espaço...`);
-
-                try {
-                    localStorage.setItem('financialData', JSON.stringify(dataCopy));
-                    Object.assign(financialData, dataCopy);
-
-                    showToast('Aviso: PDFs foram removidos para liberar espaço. Os dados foram salvos sem os anexos.', 'warning');
-                    console.log('Dados salvos sem PDFs');
-                } catch (e2) {
-                    console.error('Erro mesmo após remover PDFs:', e2);
-                    showToast('ERRO: Não foi possível salvar os dados. LocalStorage cheio. Limpe o navegador.', 'error');
-                }
+        if (window.CloudStorage) {
+            const success = await window.CloudStorage.saveAll(financialData);
+            if (success) {
+                console.log('✅ Dados salvos na nuvem!');
+                showToast('Dados salvos!', 'success');
             } else {
-                showToast('ERRO: LocalStorage cheio. Não foi possível salvar os dados.', 'error');
+                console.error('❌ Erro ao salvar na nuvem');
+                showToast('Erro ao salvar dados', 'error');
             }
         } else {
-            console.error('Erro ao salvar dados:', e);
-            showToast('Erro ao salvar dados: ' + e.message, 'error');
+            console.error('❌ CloudStorage não disponível');
+            showToast('Sistema de nuvem não configurado', 'error');
         }
+    } catch (e) {
+        console.error('❌ Erro ao salvar:', e);
+        showToast('Erro ao salvar: ' + e.message, 'error');
     }
 }
 
-function loadFromLocalStorage() {
-    const stored = localStorage.getItem('financialData');
-    if (stored) {
-        const loaded = JSON.parse(stored);
-        Object.assign(financialData, loaded);
+// NOVO: Carregar direto da nuvem (sem localStorage)
+async function loadFromLocalStorage() {
+    try {
+        console.log('☁️ Carregando dados da nuvem...');
 
-        // Ensure all month arrays exist
-        for (let i = 0; i < 12; i++) {
-            if (!financialData.expenses[i]) {
-                financialData.expenses[i] = [];
+        if (window.CloudStorage) {
+            // Preservar currentUser antes de carregar
+            const currentUser = financialData.currentUser;
+
+            const loaded = await window.CloudStorage.loadAll();
+            if (loaded) {
+                // Limpar base64 legado muito grande (novo sistema usa URL do Cloudinary)
+                if (loaded.expenses && Array.isArray(loaded.expenses)) {
+                    loaded.expenses.forEach(monthExpenses => {
+                        if (Array.isArray(monthExpenses)) {
+                            monthExpenses.forEach(expense => {
+                                if (expense.receiptPDF && typeof expense.receiptPDF === 'string' && expense.receiptPDF.length > 2000000) {
+                                    console.warn('⚠️ Base64 legado muito grande removido:', expense.description);
+                                    expense.receiptPDF = null;
+                                }
+                            });
+                        }
+                    });
+                }
+
+                Object.assign(financialData, loaded);
+
+                // Restaurar currentUser após carregar dados
+                if (currentUser) {
+                    financialData.currentUser = currentUser;
+                    console.log('✅ Usuário atual preservado:', currentUser.username);
+                }
+
+                console.log('✅ Dados carregados da nuvem!');
+            } else {
+                console.log('ℹ️ Nenhum dado na nuvem (primeira vez)');
+
+                // Ainda preservar currentUser
+                if (currentUser) {
+                    financialData.currentUser = currentUser;
+                }
             }
-            if (!financialData.income[i]) {
-                financialData.income[i] = [];
-            }
-            if (!financialData.notes[i]) {
-                financialData.notes[i] = '';
-            }
+        } else {
+            console.error('❌ CloudStorage não disponível');
         }
+    } catch (e) {
+        console.error('❌ Erro ao carregar:', e);
+        showToast('Erro ao carregar dados. Tente recarregar a página.', 'error');
     }
 }
 
@@ -1064,7 +1087,11 @@ function handleReceiptUpload(event) {
     if (files.length === 0) return;
 
     files.forEach(file => {
-        if (file.type.startsWith('image/') || file.type === 'application/pdf') {
+        if (file.type.startsWith('image/')) {
+            // Open cropper for images
+            openImageCropper(file);
+        } else if (file.type === 'application/pdf') {
+            // PDF files go directly without editing
             currentReceiptFiles.push(file);
         }
     });
@@ -1077,7 +1104,7 @@ function captureReceipt() {
     input.type = 'file';
     input.accept = 'image/*';
     input.capture = 'environment';
-    input.multiple = true;
+    input.multiple = false; // Single image for editing
 
     input.onchange = (e) => {
         handleReceiptUpload(e);
@@ -1098,6 +1125,17 @@ function displayReceiptPreview() {
             const img = document.createElement('img');
             img.src = URL.createObjectURL(file);
             item.appendChild(img);
+
+            // Add edit button for images
+            const editBtn = document.createElement('button');
+            editBtn.className = 'edit-receipt';
+            editBtn.innerHTML = '<i class="fas fa-crop"></i>';
+            editBtn.title = 'Editar imagem';
+            editBtn.onclick = (e) => {
+                e.stopPropagation();
+                editReceiptImage(index);
+            };
+            item.appendChild(editBtn);
         } else {
             const pdfIcon = document.createElement('div');
             pdfIcon.className = 'pdf-icon';
@@ -1123,41 +1161,42 @@ function removeReceipt(index) {
 async function convertFilesToPDF() {
     if (currentReceiptFiles.length === 0) return null;
 
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF();
-    let firstPage = true;
+    try {
+        const apiUrl = window.APP_CONFIG?.API_URL;
+        const userId = window.getUserId ? window.getUserId() : 'geral';
+        const file = currentReceiptFiles[0];
 
-    for (const file of currentReceiptFiles) {
-        if (file.type === 'application/pdf') {
-            // If it's already a PDF, we'll handle it separately
-            const arrayBuffer = await file.arrayBuffer();
-            const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-            return `data:application/pdf;base64,${base64}`;
-        } else {
-            // Convert image to PDF
-            const imageData = await readFileAsDataURL(file);
-            const img = await loadImage(imageData);
+        showToast('Enviando anexo...', 'success');
 
-            if (!firstPage) {
-                pdf.addPage();
-            }
-            firstPage = false;
+        // Read file as base64
+        const base64 = await readFileAsDataURL(file);
 
-            const pageWidth = pdf.internal.pageSize.getWidth();
-            const pageHeight = pdf.internal.pageSize.getHeight();
-            const imgWidth = img.width;
-            const imgHeight = img.height;
-            const ratio = Math.min(pageWidth / imgWidth, pageHeight / imgHeight);
-            const width = imgWidth * ratio;
-            const height = imgHeight * ratio;
-            const x = (pageWidth - width) / 2;
-            const y = (pageHeight - height) / 2;
+        // Upload to Cloudinary via backend
+        const response = await fetch(`${apiUrl}/api/upload`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                file: base64,
+                filename: file.name,
+                userId: userId
+            })
+        });
 
-            pdf.addImage(imageData, 'JPEG', x, y, width, height);
+        const result = await response.json();
+
+        if (!result.success) {
+            showToast('Erro ao enviar anexo: ' + result.error, 'error');
+            return null;
         }
-    }
 
-    return pdf.output('dataurlstring');
+        // Return object with URL and publicId for future deletion
+        return { url: result.url, publicId: result.publicId };
+
+    } catch (error) {
+        console.error('❌ Erro ao enviar anexo:', error);
+        showToast('Erro ao enviar anexo. Tente novamente.', 'error');
+        return null;
+    }
 }
 
 function readFileAsDataURL(file) {
@@ -1183,20 +1222,161 @@ function viewReceipt(monthIndex, index) {
 
     if (!expense.receiptPDF) return;
 
-    // Open PDF in new window
-    const win = window.open();
-    win.document.write(`
-        <html>
-            <head>
-                <title>Nota Fiscal - ${expense.description}</title>
-                <style>
-                    body { margin: 0; padding: 0; }
-                    iframe { border: none; width: 100%; height: 100vh; }
-                </style>
-            </head>
-            <body>
-                <iframe src="${expense.receiptPDF}"></iframe>
-            </body>
-        </html>
-    `);
+    // receiptPDF can be a Cloudinary URL object {url, publicId} or legacy base64 string
+    const src = (typeof expense.receiptPDF === 'object' && expense.receiptPDF.url)
+        ? expense.receiptPDF.url
+        : expense.receiptPDF;
+
+    window.open(src, '_blank');
+}
+
+// Image Cropper Functions
+function openImageCropper(file, editIndex = null) {
+    const modal = document.getElementById('cropperModal');
+    const image = document.getElementById('cropperImage');
+
+    // Store the file temporarily
+    currentCropperFileIndex = editIndex !== null ? editIndex : file;
+    isEditingExistingReceipt = editIndex !== null;
+
+    // Read file and display in cropper
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        image.src = e.target.result;
+        modal.style.display = 'block';
+
+        // Destroy previous cropper instance if exists
+        if (cropperInstance) {
+            cropperInstance.destroy();
+        }
+
+        // Initialize Cropper.js
+        cropperInstance = new Cropper(image, {
+            viewMode: 1,
+            dragMode: 'move',
+            aspectRatio: NaN, // Free aspect ratio
+            autoCropArea: 1,
+            restore: false,
+            guides: true,
+            center: true,
+            highlight: true,
+            cropBoxMovable: true,
+            cropBoxResizable: true,
+            toggleDragModeOnDblclick: false,
+            responsive: true,
+            checkOrientation: true,
+            minContainerWidth: 200,
+            minContainerHeight: 200,
+        });
+    };
+    reader.readAsDataURL(file);
+}
+
+function editReceiptImage(index) {
+    const file = currentReceiptFiles[index];
+    if (file && file.type.startsWith('image/')) {
+        openImageCropper(file, index);
+    }
+}
+
+function closeCropperModal() {
+    const modal = document.getElementById('cropperModal');
+    modal.style.display = 'none';
+
+    if (cropperInstance) {
+        cropperInstance.destroy();
+        cropperInstance = null;
+    }
+
+    currentCropperFileIndex = null;
+    isEditingExistingReceipt = false;
+
+    // Clear the file input only if not editing
+    if (!isEditingExistingReceipt) {
+        document.getElementById('expenseReceipt').value = '';
+    }
+}
+
+function cropperRotateLeft() {
+    if (cropperInstance) {
+        cropperInstance.rotate(-90);
+    }
+}
+
+function cropperRotateRight() {
+    if (cropperInstance) {
+        cropperInstance.rotate(90);
+    }
+}
+
+function cropperZoomIn() {
+    if (cropperInstance) {
+        cropperInstance.zoom(0.1);
+    }
+}
+
+function cropperZoomOut() {
+    if (cropperInstance) {
+        cropperInstance.zoom(-0.1);
+    }
+}
+
+function cropperReset() {
+    if (cropperInstance) {
+        cropperInstance.reset();
+    }
+}
+
+async function applyCrop() {
+    if (!cropperInstance) return;
+
+    try {
+        // Get cropped canvas
+        const canvas = cropperInstance.getCroppedCanvas({
+            maxWidth: 1600,
+            maxHeight: 1600,
+            fillColor: '#fff',
+            imageSmoothingEnabled: true,
+            imageSmoothingQuality: 'high',
+        });
+
+        // Convert canvas to blob
+        canvas.toBlob(async (blob) => {
+            if (!blob) {
+                showToast('Erro ao processar imagem', 'error');
+                return;
+            }
+
+            // Create a new file from the cropped image
+            let fileName;
+            if (isEditingExistingReceipt) {
+                // Keep original file name when editing
+                const originalFile = currentReceiptFiles[currentCropperFileIndex];
+                fileName = originalFile.name;
+            } else {
+                // Add suffix when adding new
+                fileName = currentCropperFileIndex.name.replace(/\.[^.]+$/, '_cropped.jpg');
+            }
+
+            const croppedFile = new File([blob], fileName, { type: 'image/jpeg' });
+
+            // Add or replace in receipt files
+            if (isEditingExistingReceipt) {
+                currentReceiptFiles[currentCropperFileIndex] = croppedFile;
+            } else {
+                currentReceiptFiles.push(croppedFile);
+            }
+
+            // Close modal
+            closeCropperModal();
+
+            // Update preview
+            displayReceiptPreview();
+
+            showToast('Imagem editada com sucesso!', 'success');
+        }, 'image/jpeg', 0.85); // 85% quality
+    } catch (error) {
+        console.error('❌ Erro ao aplicar recorte:', error);
+        showToast('Erro ao processar imagem', 'error');
+    }
 }
