@@ -99,9 +99,6 @@ function setupEventListeners() {
     // Add Income Button
     on('addIncomeBtn', 'click', () => openIncomeModal());
 
-    // Export Button
-    on('exportBtn', 'click', exportData);
-
     // Save Notes Button
     on('saveNotesBtn', 'click', saveNotes);
 
@@ -936,18 +933,6 @@ function updateCategorySummaryWithFilteredData(filteredExpenses) {
             <span>R$ ${total.toFixed(2)}</span>
         </div>
     `).join('');
-}
-
-// Export Data
-function exportData() {
-    const dataStr = JSON.stringify(financialData, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `controle-financeiro-${new Date().toISOString().split('T')[0]}.json`;
-    link.click();
-    showToast('Dados exportados com sucesso!', 'success');
 }
 
 // Local Storage

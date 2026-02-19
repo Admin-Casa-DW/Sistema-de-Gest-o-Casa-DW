@@ -53,12 +53,6 @@
                 <button id="reportsBtn" class="btn btn-secondary" onclick="window.location.href='relatorios.html'">
                     <i class="fas fa-chart-bar"></i> Relatórios
                 </button>
-                <button id="syncBtn" class="btn btn-secondary" title="Sincronizar dados entre dispositivos">
-                    <i class="fas fa-sync"></i> Sincronizar
-                </button>
-                <button id="exportBtn" class="btn btn-secondary">
-                    <i class="fas fa-download"></i> Exportar
-                </button>
                 <button id="settingsBtn" class="btn btn-secondary">
                     <i class="fas fa-cog"></i> Parâmetros
                 </button>
@@ -452,94 +446,6 @@
                         <div class="param-list" id="usersList"></div>
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Sync Modal -->
-    <div id="syncModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2><i class="fas fa-sync"></i> Sincronizar Dados Entre Dispositivos</h2>
-                <span class="close">&times;</span>
-            </div>
-            <div class="modal-body">
-                <div class="sync-info">
-                    <p><i class="fas fa-info-circle"></i> Os dados são salvos localmente em cada dispositivo. Use as opções abaixo para sincronizar entre celular e computador.</p>
-                </div>
-
-                <div class="sync-options">
-                    <!-- Option 1: Export/Import -->
-                    <div class="sync-option">
-                        <h3><i class="fas fa-file-export"></i> Opção 1: Exportar e Importar</h3>
-                        <p>Baixe todos os dados em um arquivo e importe em outro dispositivo.</p>
-                        <div class="sync-actions">
-                            <button id="btnExportAllData" class="btn btn-primary">
-                                <i class="fas fa-download"></i> Exportar Todos os Dados
-                            </button>
-                            <button id="btnImportData" class="btn btn-secondary">
-                                <i class="fas fa-upload"></i> Importar Dados
-                            </button>
-                            <input type="file" id="importFileInput" accept=".json" style="display:none;">
-                        </div>
-                    </div>
-
-                    <!-- Option 2: QR Code -->
-                    <div class="sync-option">
-                        <h3><i class="fas fa-qrcode"></i> Opção 2: QR Code (Rápido)</h3>
-                        <p>Gere um QR Code e escaneie no outro dispositivo para transferir dados.</p>
-                        <div class="sync-actions">
-                            <button id="btnGenerateQR" class="btn btn-primary">
-                                <i class="fas fa-qrcode"></i> Gerar QR Code
-                            </button>
-                            <button id="btnScanQR" class="btn btn-secondary">
-                                <i class="fas fa-camera"></i> Escanear QR Code
-                            </button>
-                        </div>
-                        <div id="qrCodeContainer" style="margin-top:20px;text-align:center;display:none;">
-                            <p style="font-size:14px;color:#666;margin-bottom:10px;">Escaneie este QR Code no outro dispositivo:</p>
-                            <div id="qrCodeImage"></div>
-                            <p style="font-size:12px;color:#999;margin-top:10px;">QR Code válido por 5 minutos</p>
-                        </div>
-                    </div>
-
-                    <!-- Option 3: Copy/Paste -->
-                    <div class="sync-option">
-                        <h3><i class="fas fa-copy"></i> Opção 3: Copiar e Colar</h3>
-                        <p>Copie os dados e cole no outro dispositivo (via WhatsApp, email, etc).</p>
-                        <div class="sync-actions">
-                            <button id="btnCopyData" class="btn btn-primary">
-                                <i class="fas fa-copy"></i> Copiar Dados
-                            </button>
-                            <button id="btnPasteData" class="btn btn-secondary">
-                                <i class="fas fa-paste"></i> Colar Dados
-                            </button>
-                        </div>
-                        <textarea id="pasteDataArea" style="display:none;width:100%;height:150px;margin-top:15px;font-family:monospace;font-size:12px;" placeholder="Cole os dados aqui..."></textarea>
-                    </div>
-
-                    <!-- Option 4: Forçar Sincronização da Nuvem -->
-                    <div class="sync-option" id="cloudSyncOption" style="display:none;">
-                        <h3><i class="fas fa-cloud-download-alt"></i> Opção 4: Sincronização com Nuvem</h3>
-                        <p><strong>⚠️ SUBSTITUIR dados locais pelos dados da nuvem</strong><br>
-                        Use isso no celular para baixar dados do computador que já foram sincronizados.</p>
-                        <div class="sync-actions">
-                            <button id="btnForceCloudSync" class="btn btn-warning">
-                                <i class="fas fa-cloud-download-alt"></i> Baixar da Nuvem (Limpar Local)
-                            </button>
-                        </div>
-                        <p style="font-size:12px;color:#999;margin-top:10px;">
-                            <i class="fas fa-info-circle"></i> Primeiro sincronize no computador, depois use este botão no celular.
-                        </p>
-                    </div>
-                </div>
-
-                <div class="sync-warning">
-                    <p><i class="fas fa-exclamation-triangle"></i> <strong>Atenção:</strong> Importar dados irá <strong>substituir</strong> todos os dados atuais neste dispositivo. Faça backup antes de importar!</p>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary close-modal">Fechar</button>
             </div>
         </div>
     </div>
