@@ -651,6 +651,8 @@
                 <div class="table-header">
                     <div class="table-title"><i class="fas fa-list"></i> Todas as Manutenções</div>
                     <div class="table-filters">
+                        <input type="date" id="filterDateFrom" onchange="renderTable()" placeholder="Data inicial" title="Data inicial">
+                        <input type="date" id="filterDateTo" onchange="renderTable()" placeholder="Data final" title="Data final">
                         <select id="filterStatus" onchange="renderTable()">
                             <option value="">Todos os Status</option>
                             <option value="pendente">Pendente</option>
@@ -665,6 +667,9 @@
                             <option value="">Todos os Tipos</option>
                         </select>
                         <input type="text" id="filterSearch" placeholder="Buscar..." oninput="renderTable()" style="width:150px;">
+                        <button class="btn btn-secondary" onclick="clearDateFilters()" style="font-size:13px;padding:8px 12px;" title="Limpar filtros de data">
+                            <i class="fas fa-times"></i>
+                        </button>
                     </div>
                 </div>
                 <div style="overflow-x:auto;">
