@@ -139,17 +139,26 @@ const CloudStorage = {
     convertFromAPI(apiData) {
         const data = this.createEmptyData();
 
-        // Converter despesas
+        // Converter despesas — concatenar grupos de diferentes anos no mesmo mês
+        // e garantir que cada item carrega seu year para o filtro funcionar
         if (apiData.expenses && Array.isArray(apiData.expenses)) {
             apiData.expenses.forEach(exp => {
-                data.expenses[exp.month] = exp.items || [];
+                const itemsWithYear = (exp.items || []).map(item => ({
+                    ...item,
+                    year: item.year || exp.year || new Date().getFullYear()
+                }));
+                data.expenses[exp.month] = (data.expenses[exp.month] || []).concat(itemsWithYear);
             });
         }
 
-        // Converter receitas
+        // Converter receitas — mesmo tratamento
         if (apiData.income && Array.isArray(apiData.income)) {
             apiData.income.forEach(inc => {
-                data.income[inc.month] = inc.items || [];
+                const itemsWithYear = (inc.items || []).map(item => ({
+                    ...item,
+                    year: item.year || inc.year || new Date().getFullYear()
+                }));
+                data.income[inc.month] = (data.income[inc.month] || []).concat(itemsWithYear);
             });
         }
 
@@ -202,24 +211,33 @@ const CloudStorage = {
             paymentMethods: financialData.paymentMethods || []
         };
 
-        // Converter despesas
+        // Converter despesas — agrupar por {month, year} usando a data real de cada item
         for (let i = 0; i < 12; i++) {
             if (financialData.expenses[i] && financialData.expenses[i].length > 0) {
-                apiData.expenses.push({
-                    month: i,
-                    year: new Date().getFullYear(),
-                    items: financialData.expenses[i]
+                // Agrupar itens do mesmo mês pelo ano da sua data
+                const byYear = {};
+                financialData.expenses[i].forEach(item => {
+                    const itemYear = item.date ? parseInt(item.date.substring(0, 4)) : new Date().getFullYear();
+                    if (!byYear[itemYear]) byYear[itemYear] = [];
+                    byYear[itemYear].push(item);
+                });
+                Object.entries(byYear).forEach(([year, items]) => {
+                    apiData.expenses.push({ month: i, year: parseInt(year), items });
                 });
             }
         }
 
-        // Converter receitas
+        // Converter receitas — agrupar por {month, year} usando a data real de cada item
         for (let i = 0; i < 12; i++) {
             if (financialData.income[i] && financialData.income[i].length > 0) {
-                apiData.income.push({
-                    month: i,
-                    year: new Date().getFullYear(),
-                    items: financialData.income[i]
+                const byYear = {};
+                financialData.income[i].forEach(item => {
+                    const itemYear = item.date ? parseInt(item.date.substring(0, 4)) : new Date().getFullYear();
+                    if (!byYear[itemYear]) byYear[itemYear] = [];
+                    byYear[itemYear].push(item);
+                });
+                Object.entries(byYear).forEach(([year, items]) => {
+                    apiData.income.push({ month: i, year: parseInt(year), items });
                 });
             }
         }
