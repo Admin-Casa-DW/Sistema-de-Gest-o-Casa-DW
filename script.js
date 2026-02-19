@@ -1061,6 +1061,10 @@ function clearFinancialData() {
 window.checkLocalStorageSize = checkLocalStorageSize;
 window.clearFinancialData = clearFinancialData;
 
+// Expor funções de sync para uso por auth.js e settings.js
+window.loadFromLocalStorage = loadFromLocalStorage;
+window.saveToLocalStorage = saveToLocalStorage;
+
 function showToast(message, type = 'success') {
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
