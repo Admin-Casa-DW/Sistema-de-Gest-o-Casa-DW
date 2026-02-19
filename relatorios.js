@@ -4,29 +4,45 @@ let filteredExpenses = [];
 let categoryChart = null;
 let monthlyChart = null;
 
-// Carregar dados do localStorage
-function loadData() {
-    const savedData = localStorage.getItem('financialData');
-    if (savedData) {
-        financialData = JSON.parse(savedData);
-    } else {
-        // Estrutura padrão se não houver dados
+const MONTHS = [
+    'JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL',
+    'MAIO', 'JUNHO', 'JULHO', 'AGOSTO',
+    'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'
+];
+
+// Carregar dados do CloudStorage (MongoDB)
+async function loadData() {
+    try {
+        // Obter userId do sessionStorage (definido no login)
+        const currentUserStr = sessionStorage.getItem('currentUser');
+        if (!currentUserStr) {
+            console.warn('⚠️ Usuário não logado');
+            initEmptyData();
+            return;
+        }
+
+        const currentUser = JSON.parse(currentUserStr);
+        const userId = currentUser.username;
+        const apiUrl = window.APP_CONFIG?.API_URL;
+
+        if (!apiUrl || !userId) {
+            console.warn('⚠️ API ou userId não configurado');
+            initEmptyData();
+            return;
+        }
+
+        const response = await fetch(`${apiUrl}/api/sync/${userId}`);
+        const data = await response.json();
+
+        // Montar estrutura de financialData compatível com os filtros
         financialData = {
-            months: [
-                'JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL',
-                'MAIO', 'JUNHO', 'JULHO', 'AGOSTO',
-                'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'
-            ],
+            months: MONTHS,
             expenses: {},
             categories: [
                 'Alimentação', 'Carro', 'Transporte', 'Manutenção',
                 'Farmácia', 'Outros', 'Pets', 'Hotel', 'Escritório', 'Fornecedor'
             ],
-            suppliers: [
-                'Amoedo', 'Carrefour', 'Detail Wash', 'Droga Raia', 'Hortfruti',
-                'Kalunga', 'Lave Bem', 'Outros', 'Pacheco', 'PetChic', 'Posto hum',
-                'Prezunic', 'RM água', 'Venancio', 'Zona Sul'
-            ],
+            suppliers: [],
             paymentMethods: [
                 'Cartão de Crédito', 'Reembolso', 'Conta Corrente', 'Outros'
             ]
@@ -36,6 +52,49 @@ function loadData() {
         for (let i = 0; i < 12; i++) {
             financialData.expenses[i] = [];
         }
+
+        // Preencher com dados da API
+        // A API retorna expenses como array de {month, year, items}
+        if (data.expenses && Array.isArray(data.expenses)) {
+            data.expenses.forEach(monthData => {
+                const monthIndex = monthData.month;
+                const items = monthData.items || [];
+                if (monthIndex >= 0 && monthIndex < 12) {
+                    financialData.expenses[monthIndex] = items;
+                }
+            });
+        }
+
+        // Coletar fornecedores únicos das despesas
+        const suppliersSet = new Set();
+        Object.values(financialData.expenses).forEach(monthExpenses => {
+            monthExpenses.forEach(expense => {
+                if (expense.supplier) suppliersSet.add(expense.supplier);
+            });
+        });
+        financialData.suppliers = Array.from(suppliersSet).sort();
+
+        console.log('✅ Dados carregados do MongoDB para relatórios');
+
+    } catch (error) {
+        console.error('❌ Erro ao carregar dados:', error);
+        initEmptyData();
+    }
+}
+
+function initEmptyData() {
+    financialData = {
+        months: MONTHS,
+        expenses: {},
+        categories: [
+            'Alimentação', 'Carro', 'Transporte', 'Manutenção',
+            'Farmácia', 'Outros', 'Pets', 'Hotel', 'Escritório', 'Fornecedor'
+        ],
+        suppliers: [],
+        paymentMethods: ['Cartão de Crédito', 'Reembolso', 'Conta Corrente', 'Outros']
+    };
+    for (let i = 0; i < 12; i++) {
+        financialData.expenses[i] = [];
     }
 }
 
@@ -43,6 +102,7 @@ function loadData() {
 function populateFilters() {
     // Categorias
     const categorySelect = document.getElementById('filterCategory');
+    categorySelect.innerHTML = '<option value="">Todas as Categorias</option>';
     financialData.categories.forEach(category => {
         const option = document.createElement('option');
         option.value = category;
@@ -52,6 +112,7 @@ function populateFilters() {
 
     // Fornecedores
     const supplierSelect = document.getElementById('filterSupplier');
+    supplierSelect.innerHTML = '<option value="">Todos os Fornecedores</option>';
     financialData.suppliers.forEach(supplier => {
         const option = document.createElement('option');
         option.value = supplier;
@@ -61,6 +122,7 @@ function populateFilters() {
 
     // Métodos de Pagamento
     const paymentSelect = document.getElementById('filterPaymentMethod');
+    paymentSelect.innerHTML = '<option value="">Todos os Métodos</option>';
     financialData.paymentMethods.forEach(method => {
         const option = document.createElement('option');
         option.value = method;
@@ -78,60 +140,35 @@ function applyFilters() {
     const dateFrom = document.getElementById('filterDateFrom').value;
     const dateTo = document.getElementById('filterDateTo').value;
 
-    // Resetar array de despesas filtradas
     filteredExpenses = [];
 
-    // Determinar quais meses processar
     const monthsToProcess = month === '' ? Object.keys(financialData.expenses) : [month];
 
-    // Filtrar despesas
     monthsToProcess.forEach(monthIndex => {
         const monthExpenses = financialData.expenses[monthIndex] || [];
 
         monthExpenses.forEach(expense => {
             let include = true;
 
-            // Filtro por categoria
-            if (category && expense.category !== category) {
-                include = false;
-            }
-
-            // Filtro por fornecedor
-            if (supplier && expense.supplier !== supplier) {
-                include = false;
-            }
-
-            // Filtro por método de pagamento
-            if (paymentMethod && expense.paymentMethod !== paymentMethod) {
-                include = false;
-            }
-
-            // Filtro por data
-            if (dateFrom && expense.date < dateFrom) {
-                include = false;
-            }
-            if (dateTo && expense.date > dateTo) {
-                include = false;
-            }
+            if (category && expense.category !== category) include = false;
+            if (supplier && expense.supplier !== supplier) include = false;
+            if (paymentMethod && expense.paymentMethod !== paymentMethod) include = false;
+            if (dateFrom && expense.date < dateFrom) include = false;
+            if (dateTo && expense.date > dateTo) include = false;
 
             if (include) {
                 filteredExpenses.push({
                     ...expense,
-                    monthIndex: monthIndex,
-                    monthName: financialData.months[monthIndex]
+                    monthIndex: parseInt(monthIndex),
+                    monthName: MONTHS[parseInt(monthIndex)] || ''
                 });
             }
         });
     });
 
-    // Ordenar por data (mais antigo primeiro - crescente)
-    filteredExpenses.sort((a, b) => {
-        const dateA = new Date(a.date);
-        const dateB = new Date(b.date);
-        return dateA - dateB;
-    });
+    // Ordenar por data (crescente)
+    filteredExpenses.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    // Atualizar interface
     updateSummary();
     updateTable();
     updateCharts();
@@ -139,7 +176,7 @@ function applyFilters() {
 
 // Atualizar resumo
 function updateSummary() {
-    const total = filteredExpenses.reduce((sum, expense) => sum + parseFloat(expense.amount || 0), 0);
+    const total = filteredExpenses.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
     const count = filteredExpenses.length;
     const average = count > 0 ? total / count : 0;
 
@@ -177,12 +214,12 @@ function updateTable() {
                 <td>${monthDisplay}</td>
                 <td>
                     <span class="category-badge" style="background: ${categoryColor}20; color: ${categoryColor}; border: 1px solid ${categoryColor}40;">
-                        ${expense.category}
+                        ${expense.category || '-'}
                     </span>
                 </td>
-                <td>${expense.supplier}</td>
+                <td>${expense.supplier || '-'}</td>
                 <td>${expense.description || '-'}</td>
-                <td>${expense.paymentMethod}</td>
+                <td>${expense.paymentMethod || '-'}</td>
                 <td style="text-align: right; font-weight: 600;">${formatCurrency(expense.amount)}</td>
             </tr>
         `;
@@ -198,11 +235,8 @@ function updateCharts() {
 // Gráfico por categoria
 function updateCategoryChart() {
     const categoryData = {};
-
     filteredExpenses.forEach(expense => {
-        if (!categoryData[expense.category]) {
-            categoryData[expense.category] = 0;
-        }
+        if (!categoryData[expense.category]) categoryData[expense.category] = 0;
         categoryData[expense.category] += parseFloat(expense.amount || 0);
     });
 
@@ -211,12 +245,10 @@ function updateCategoryChart() {
     const backgroundColors = labels.map(label => getCategoryColor(label));
 
     const ctx = document.getElementById('categoryChart').getContext('2d');
-
-    if (categoryChart) {
-        categoryChart.destroy();
-    }
+    if (categoryChart) categoryChart.destroy();
 
     if (labels.length === 0) {
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
         ctx.font = '16px Arial';
         ctx.fillStyle = '#999';
         ctx.textAlign = 'center';
@@ -227,29 +259,20 @@ function updateCategoryChart() {
     categoryChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: labels,
-            datasets: [{
-                data: data,
-                backgroundColor: backgroundColors,
-                borderWidth: 2,
-                borderColor: '#fff'
-            }]
+            labels,
+            datasets: [{ data, backgroundColor: backgroundColors, borderWidth: 2, borderColor: '#fff' }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: true,
             plugins: {
-                legend: {
-                    position: 'right',
-                },
+                legend: { position: 'right' },
                 tooltip: {
                     callbacks: {
                         label: function(context) {
-                            const label = context.label || '';
-                            const value = formatCurrency(context.parsed);
                             const total = context.dataset.data.reduce((a, b) => a + b, 0);
                             const percentage = ((context.parsed / total) * 100).toFixed(1);
-                            return `${label}: ${value} (${percentage}%)`;
+                            return `${context.label}: ${formatCurrency(context.parsed)} (${percentage}%)`;
                         }
                     }
                 }
@@ -261,27 +284,19 @@ function updateCategoryChart() {
 // Gráfico mensal
 function updateMonthlyChart() {
     const monthlyData = {};
-
-    // Inicializar todos os meses com 0
-    financialData.months.forEach((month, index) => {
-        monthlyData[index] = 0;
-    });
-
-    // Somar despesas por mês
+    MONTHS.forEach((_, index) => { monthlyData[index] = 0; });
     filteredExpenses.forEach(expense => {
         monthlyData[expense.monthIndex] += parseFloat(expense.amount || 0);
     });
 
-    const labels = financialData.months.map(m => m.replace(/\s*\d{4}$/, ''));
+    const labels = MONTHS.map(m => m.replace(/\s*\d{4}$/, ''));
     const data = Object.values(monthlyData);
 
     const ctx = document.getElementById('monthlyChart').getContext('2d');
-
-    if (monthlyChart) {
-        monthlyChart.destroy();
-    }
+    if (monthlyChart) monthlyChart.destroy();
 
     if (filteredExpenses.length === 0) {
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
         ctx.font = '16px Arial';
         ctx.fillStyle = '#999';
         ctx.textAlign = 'center';
@@ -292,10 +307,10 @@ function updateMonthlyChart() {
     monthlyChart = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: labels,
+            labels,
             datasets: [{
                 label: 'Despesas Mensais',
-                data: data,
+                data,
                 backgroundColor: 'rgba(54, 162, 235, 0.5)',
                 borderColor: 'rgba(54, 162, 235, 1)',
                 borderWidth: 2
@@ -307,23 +322,13 @@ function updateMonthlyChart() {
             scales: {
                 y: {
                     beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return 'R$ ' + value.toLocaleString('pt-BR');
-                        }
-                    }
+                    ticks: { callback: value => 'R$ ' + value.toLocaleString('pt-BR') }
                 }
             },
             plugins: {
-                legend: {
-                    display: false
-                },
+                legend: { display: false },
                 tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return formatCurrency(context.parsed.y);
-                        }
-                    }
+                    callbacks: { label: context => formatCurrency(context.parsed.y) }
                 }
             }
         }
@@ -342,8 +347,7 @@ function clearFilters() {
     filteredExpenses = [];
     updateSummary();
 
-    const tbody = document.getElementById('reportTableBody');
-    tbody.innerHTML = `
+    document.getElementById('reportTableBody').innerHTML = `
         <tr>
             <td colspan="7" class="no-data">
                 <i class="fas fa-inbox" style="font-size: 48px; margin-bottom: 10px;"></i>
@@ -351,15 +355,13 @@ function clearFilters() {
             </td>
         </tr>
     `;
-
     document.getElementById('resultsInfo').textContent = '';
 
-    // Limpar gráficos
     if (categoryChart) categoryChart.destroy();
     if (monthlyChart) monthlyChart.destroy();
 }
 
-// Exportar relatório para Excel
+// Exportar relatório para CSV
 function exportReport() {
     if (filteredExpenses.length === 0) {
         alert('Não há dados para exportar. Aplique os filtros primeiro.');
@@ -367,29 +369,24 @@ function exportReport() {
     }
 
     let csv = 'Data,Mês,Categoria,Fornecedor,Descrição,Método de Pagamento,Valor\n';
-
     filteredExpenses.forEach(expense => {
         csv += `${formatDate(expense.date)},`;
         csv += `${(expense.monthName || '').replace(/\s*\d{4}$/, '')},`;
-        csv += `${expense.category},`;
-        csv += `${expense.supplier},`;
+        csv += `${expense.category || ''},`;
+        csv += `${expense.supplier || ''},`;
         csv += `"${expense.description || ''}",`;
-        csv += `${expense.paymentMethod},`;
+        csv += `${expense.paymentMethod || ''},`;
         csv += `${expense.amount}\n`;
     });
 
-    // Adicionar linha de total
-    const total = filteredExpenses.reduce((sum, expense) => sum + parseFloat(expense.amount || 0), 0);
+    const total = filteredExpenses.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
     csv += `,,,,,,TOTAL: R$ ${total.toFixed(2)}\n`;
 
-    // Download do arquivo
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
-
     const now = new Date();
-    const filename = `relatorio_despesas_${now.getFullYear()}${(now.getMonth()+1).toString().padStart(2,'0')}${now.getDate().toString().padStart(2,'0')}.csv`;
-
+    const filename = `relatorio_${now.getFullYear()}${(now.getMonth()+1).toString().padStart(2,'0')}${now.getDate().toString().padStart(2,'0')}.csv`;
     link.setAttribute('href', url);
     link.setAttribute('download', filename);
     link.style.visibility = 'hidden';
@@ -400,10 +397,7 @@ function exportReport() {
 
 // Funções auxiliares
 function formatCurrency(value) {
-    return new Intl.NumberFormat('pt-BR', {
-        style: 'currency',
-        currency: 'BRL'
-    }).format(value || 0);
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
 }
 
 function formatDate(dateStr) {
@@ -414,28 +408,22 @@ function formatDate(dateStr) {
 
 function getCategoryColor(category) {
     const colors = {
-        'Alimentação': '#FF6384',
-        'Carro': '#36A2EB',
-        'Transporte': '#FFCE56',
-        'Manutenção': '#4BC0C0',
-        'Farmácia': '#9966FF',
-        'Outros': '#FF9F40',
-        'Pets': '#FF6384',
-        'Hotel': '#C9CBCF',
-        'Escritório': '#4BC0C0',
-        'Fornecedor': '#36A2EB'
+        'Alimentação': '#FF6384', 'Carro': '#36A2EB', 'Transporte': '#FFCE56',
+        'Manutenção': '#4BC0C0', 'Farmácia': '#9966FF', 'Outros': '#FF9F40',
+        'Pets': '#FF6384', 'Hotel': '#C9CBCF', 'Escritório': '#4BC0C0', 'Fornecedor': '#36A2EB'
     };
     return colors[category] || '#999999';
 }
 
 // Inicializar ao carregar a página
-document.addEventListener('DOMContentLoaded', function() {
-    loadData();
+document.addEventListener('DOMContentLoaded', async function() {
+    await loadData();
     populateFilters();
 
     // Aplicar filtro do mês atual por padrão
     const currentMonth = new Date().getMonth();
     document.getElementById('filterMonth').value = currentMonth;
+    applyFilters();
 
-    console.log('Relatórios carregados com sucesso');
+    console.log('✅ Relatórios carregados do MongoDB');
 });
