@@ -179,6 +179,11 @@ const CloudStorage = {
             data.fleet = apiData.fleet;
         }
 
+        // Converter manutenções
+        if (apiData.maintenance && Array.isArray(apiData.maintenance)) {
+            data.maintenance = apiData.maintenance;
+        }
+
         // Converter parâmetros: anos, categorias, fornecedores, formas de pagamento
         if (apiData.years && Array.isArray(apiData.years) && apiData.years.length > 0) {
             data.years = apiData.years;
@@ -208,7 +213,8 @@ const CloudStorage = {
             years: financialData.years || [2024, 2025, 2026],
             categories: financialData.categories || [],
             suppliers: financialData.suppliers || [],
-            paymentMethods: financialData.paymentMethods || []
+            paymentMethods: financialData.paymentMethods || [],
+            maintenance: financialData.maintenance || []
         };
 
         // Converter despesas — agrupar por {month, year} usando a data real de cada item
