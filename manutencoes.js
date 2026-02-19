@@ -6,16 +6,15 @@ const API_URL_MANUT = window.APP_CONFIG?.API_URL || null;
 
 let maintenances = [];
 let maintenanceTypes = []; // lista gerenciada de tipos
+let maintenanceAreas = []; // lista gerenciada de áreas
 let calendarDate = new Date();
 let editingId = null;
 let viewingId = null;
 let pendingFiles = [];
 
-// Áreas sugeridas (não gerenciadas, só sugestão no form)
-const KNOWN_AREAS = ['Sala', 'Cozinha', 'Banheiro', 'Quarto', 'Garagem', 'Área externa', 'Piscina', 'Jardim', 'Lavanderia', 'Escritório', 'Geral'];
-
-// Tipos padrão (carregados do backend; estes são os defaults se não houver nenhum salvo)
+// Defaults se não houver nenhum salvo
 const DEFAULT_TYPES = ['Pintura', 'Hidráulica', 'Elétrica', 'Ar-condicionado', 'Dedetização', 'Limpeza', 'Reforma', 'Manutenção preventiva', 'Instalação', 'Reparo'];
+const DEFAULT_AREAS = ['Sala', 'Cozinha', 'Banheiro', 'Quarto', 'Garagem', 'Área externa', 'Piscina', 'Jardim', 'Lavanderia', 'Escritório', 'Geral'];
 
 // ===== INIT =====
 document.addEventListener('DOMContentLoaded', async function() {
@@ -27,6 +26,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     populateFilterOptions();
     setDefaultDate();
     renderTypesList();
+    renderAreasList();
     console.log('✅ Manutenções carregadas');
 });
 
@@ -43,6 +43,7 @@ async function loadData() {
             console.warn('⚠️ Sem userId ou API_URL — usando dados locais');
             maintenances = JSON.parse(sessionStorage.getItem('manut_local') || '[]');
             maintenanceTypes = JSON.parse(sessionStorage.getItem('manut_types') || 'null') || [...DEFAULT_TYPES];
+            maintenanceAreas = JSON.parse(sessionStorage.getItem('manut_areas') || 'null') || [...DEFAULT_AREAS];
             return;
         }
 
@@ -54,12 +55,16 @@ async function loadData() {
         maintenanceTypes = (data.maintenanceTypes && data.maintenanceTypes.length > 0)
             ? data.maintenanceTypes
             : [...DEFAULT_TYPES];
+        maintenanceAreas = (data.maintenanceAreas && data.maintenanceAreas.length > 0)
+            ? data.maintenanceAreas
+            : [...DEFAULT_AREAS];
 
-        console.log(`✅ ${maintenances.length} manutenções, ${maintenanceTypes.length} tipos carregados`);
+        console.log(`✅ ${maintenances.length} manutenções, ${maintenanceTypes.length} tipos, ${maintenanceAreas.length} áreas carregados`);
     } catch (error) {
         console.error('❌ Erro ao carregar:', error);
         maintenances = [];
         maintenanceTypes = [...DEFAULT_TYPES];
+        maintenanceAreas = [...DEFAULT_AREAS];
     }
 }
 
@@ -71,12 +76,17 @@ async function saveTypes() {
     return saveToAPI({ maintenanceTypes });
 }
 
+async function saveAreas() {
+    return saveToAPI({ maintenanceAreas });
+}
+
 async function saveToAPI(payload) {
     try {
         const userId = sessionStorage.getItem('user-id');
         if (!userId || !API_URL_MANUT) {
             if (payload.maintenance !== undefined) sessionStorage.setItem('manut_local', JSON.stringify(maintenances));
             if (payload.maintenanceTypes !== undefined) sessionStorage.setItem('manut_types', JSON.stringify(maintenanceTypes));
+            if (payload.maintenanceAreas !== undefined) sessionStorage.setItem('manut_areas', JSON.stringify(maintenanceAreas));
             return true;
         }
 
@@ -329,12 +339,10 @@ function renderTable() {
 }
 
 function populateFilterOptions() {
-    const areas = [...new Set(maintenances.map(m => m.area).filter(Boolean))].sort();
-
     // Reset e repopula filtros
     const areaSelect = document.getElementById('filterArea');
     areaSelect.innerHTML = '<option value="">Todas as Áreas</option>';
-    areas.forEach(a => {
+    maintenanceAreas.sort().forEach(a => {
         const opt = document.createElement('option');
         opt.value = a; opt.textContent = a;
         areaSelect.appendChild(opt);
@@ -349,8 +357,7 @@ function populateFilterOptions() {
     });
 
     // Datalists para o formulário
-    const allAreas = [...new Set([...KNOWN_AREAS, ...areas])].sort();
-    document.getElementById('areasList').innerHTML = allAreas.map(a => `<option value="${a}">`).join('');
+    document.getElementById('areasList').innerHTML = maintenanceAreas.sort().map(a => `<option value="${a}">`).join('');
     document.getElementById('typesList').innerHTML = maintenanceTypes.sort().map(t => `<option value="${t}">`).join('');
 }
 
@@ -358,7 +365,7 @@ function populateFilterOptions() {
 function switchTab(tab, btn) {
     document.querySelectorAll('.manut-tab').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.manut-panel').forEach(p => p.classList.remove('active'));
-    const tabMap = { agenda: 'tabAgenda', lista: 'tabLista', tipos: 'tabTipos' };
+    const tabMap = { agenda: 'tabAgenda', lista: 'tabLista', tipos: 'tabTipos', areas: 'tabAreas' };
     document.getElementById(tabMap[tab]).classList.add('active');
     btn.classList.add('active');
 }
@@ -837,6 +844,98 @@ function deleteType(name) {
 
 function escapeAttr(str) {
     return str.replace(/'/g, "\\'");
+}
+
+// ===== ÁREAS/CÔMODOS — CRUD =====
+function renderAreasList() {
+    const tbody = document.getElementById('areasTableBody');
+    if (!tbody) return;
+
+    const sorted = [...maintenanceAreas].sort((a, b) => a.localeCompare(b));
+
+    if (sorted.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="2" class="no-data" style="padding:20px;text-align:center;color:#999;">Nenhuma área cadastrada.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = sorted.map(a => `
+        <tr>
+            <td>${a}</td>
+            <td style="white-space:nowrap;">
+                <button class="action-btn edit" onclick="editArea('${escapeAttr(a)}')" title="Renomear"><i class="fas fa-edit"></i></button>
+                <button class="action-btn delete" onclick="deleteArea('${escapeAttr(a)}')" title="Excluir"><i class="fas fa-trash"></i></button>
+            </td>
+        </tr>
+    `).join('');
+
+    // Atualiza datalist do formulário
+    document.getElementById('areasList').innerHTML = sorted.map(a => `<option value="${a}">`).join('');
+}
+
+function addArea() {
+    const input = document.getElementById('newAreaName');
+    const name = input.value.trim();
+    if (!name) { showToast('Digite o nome da área.', 'warning'); return; }
+
+    if (maintenanceAreas.map(a => a.toLowerCase()).includes(name.toLowerCase())) {
+        showToast('Esta área já existe.', 'warning');
+        return;
+    }
+
+    maintenanceAreas.push(name);
+    input.value = '';
+    saveAreas().then(ok => {
+        if (ok) {
+            showToast('Área adicionada!', 'success');
+            renderAreasList();
+            populateFilterOptions();
+        } else {
+            showToast('Erro ao salvar.', 'error');
+        }
+    });
+}
+
+function editArea(oldName) {
+    const newName = prompt('Renomear área:', oldName);
+    if (!newName || newName.trim() === oldName) return;
+    const trimmed = newName.trim();
+
+    if (maintenanceAreas.map(a => a.toLowerCase()).includes(trimmed.toLowerCase())) {
+        showToast('Esta área já existe.', 'warning');
+        return;
+    }
+
+    // Renomear em todas as manutenções
+    maintenances.forEach(m => { if (m.area === oldName) m.area = trimmed; });
+    const idx = maintenanceAreas.indexOf(oldName);
+    if (idx !== -1) maintenanceAreas[idx] = trimmed;
+
+    Promise.all([saveAreas(), saveMaintenances()]).then(() => {
+        showToast('Área renomeada!', 'success');
+        renderAreasList();
+        renderTable();
+        populateFilterOptions();
+    });
+}
+
+function deleteArea(name) {
+    const inUse = maintenances.some(m => m.area === name);
+    const msg = inUse
+        ? `A área "${name}" está em uso em ${maintenances.filter(m => m.area === name).length} manutenção(ões). Deseja excluir mesmo assim?`
+        : `Excluir a área "${name}"?`;
+
+    if (!confirm(msg)) return;
+
+    maintenanceAreas = maintenanceAreas.filter(a => a !== name);
+    saveAreas().then(ok => {
+        if (ok) {
+            showToast('Área excluída.', 'success');
+            renderAreasList();
+            populateFilterOptions();
+        } else {
+            showToast('Erro ao salvar.', 'error');
+        }
+    });
 }
 
 // ===== HELPERS =====
