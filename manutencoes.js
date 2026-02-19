@@ -289,6 +289,8 @@ function renderTable() {
     const areaF = document.getElementById('filterArea').value;
     const typeF = document.getElementById('filterType').value;
     const searchF = document.getElementById('filterSearch').value.toLowerCase();
+    const dateFromF = document.getElementById('filterDateFrom').value;
+    const dateToF = document.getElementById('filterDateTo').value;
 
     let filtered = maintenances.filter(m => {
         const s = getEffectiveStatus(m);
@@ -299,6 +301,11 @@ function renderTable() {
             const text = `${m.type} ${m.area} ${m.supplier} ${m.desc}`.toLowerCase();
             if (!text.includes(searchF)) return false;
         }
+
+        // Filtro por período (data de execução)
+        if (dateFromF && m.date && m.date < dateFromF) return false;
+        if (dateToF && m.date && m.date > dateToF) return false;
+
         return true;
     });
 
@@ -359,6 +366,12 @@ function populateFilterOptions() {
     // Datalists para o formulário
     document.getElementById('areasList').innerHTML = maintenanceAreas.sort().map(a => `<option value="${a}">`).join('');
     document.getElementById('typesList').innerHTML = maintenanceTypes.sort().map(t => `<option value="${t}">`).join('');
+}
+
+function clearDateFilters() {
+    document.getElementById('filterDateFrom').value = '';
+    document.getElementById('filterDateTo').value = '';
+    renderTable();
 }
 
 // ===== TABS =====
