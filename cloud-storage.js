@@ -140,12 +140,12 @@ const CloudStorage = {
         const data = this.createEmptyData();
 
         // Converter despesas — concatenar grupos de diferentes anos no mesmo mês
-        // e garantir que cada item carrega seu year para o filtro funcionar
+        // O year de cada item é extraído da sua data real (fonte de verdade)
         if (apiData.expenses && Array.isArray(apiData.expenses)) {
             apiData.expenses.forEach(exp => {
                 const itemsWithYear = (exp.items || []).map(item => ({
                     ...item,
-                    year: item.year || exp.year || new Date().getFullYear()
+                    year: item.date ? parseInt(item.date.substring(0, 4)) : (item.year || exp.year || new Date().getFullYear())
                 }));
                 data.expenses[exp.month] = (data.expenses[exp.month] || []).concat(itemsWithYear);
             });
@@ -156,7 +156,7 @@ const CloudStorage = {
             apiData.income.forEach(inc => {
                 const itemsWithYear = (inc.items || []).map(item => ({
                     ...item,
-                    year: item.year || inc.year || new Date().getFullYear()
+                    year: item.date ? parseInt(item.date.substring(0, 4)) : (item.year || inc.year || new Date().getFullYear())
                 }));
                 data.income[inc.month] = (data.income[inc.month] || []).concat(itemsWithYear);
             });
