@@ -87,40 +87,37 @@ async function initializeApp() {
 
 // Event Listeners
 function setupEventListeners() {
-    // Add Expense Button
-    const addExpenseBtn = document.getElementById('addExpenseBtn');
-    if (addExpenseBtn) {
-        addExpenseBtn.addEventListener('click', () => {
-            console.log('Add expense button clicked');
-            openExpenseModal();
-        });
-        console.log('Add expense button listener attached');
-    } else {
-        console.error('Add expense button not found');
+    // Helper para anexar listener com segurança (evita crash se elemento não existe)
+    function on(id, event, fn) {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener(event, fn);
     }
 
+    // Add Expense Button
+    on('addExpenseBtn', 'click', () => { console.log('Add expense button clicked'); openExpenseModal(); });
+
     // Add Income Button
-    document.getElementById('addIncomeBtn').addEventListener('click', () => openIncomeModal());
+    on('addIncomeBtn', 'click', () => openIncomeModal());
 
     // Export Button
-    document.getElementById('exportBtn').addEventListener('click', exportData);
+    on('exportBtn', 'click', exportData);
 
     // Save Notes Button
-    document.getElementById('saveNotesBtn').addEventListener('click', saveNotes);
+    on('saveNotesBtn', 'click', saveNotes);
 
     // Expense Form
-    document.getElementById('expenseForm').addEventListener('submit', handleExpenseSubmit);
+    on('expenseForm', 'submit', handleExpenseSubmit);
 
     // Income Form
-    document.getElementById('incomeForm').addEventListener('submit', handleIncomeSubmit);
+    on('incomeForm', 'submit', handleIncomeSubmit);
 
     // Modal Close Buttons
     document.querySelectorAll('.close').forEach(closeBtn => {
         closeBtn.addEventListener('click', closeModals);
     });
 
-    document.getElementById('cancelExpense').addEventListener('click', closeModals);
-    document.getElementById('cancelIncome').addEventListener('click', closeModals);
+    on('cancelExpense', 'click', closeModals);
+    on('cancelIncome', 'click', closeModals);
 
     // Click outside modal to close
     window.addEventListener('click', function(e) {
@@ -130,19 +127,17 @@ function setupEventListeners() {
     });
 
     // Filters
-    document.getElementById('searchExpense').addEventListener('input', filterExpenses);
-    document.getElementById('filterCategory').addEventListener('change', filterExpenses);
-    document.getElementById('filterSupplier').addEventListener('change', filterExpenses);
+    on('searchExpense', 'input', filterExpenses);
+    on('filterCategory', 'change', filterExpenses);
+    on('filterSupplier', 'change', filterExpenses);
 
-    // Month and Year filters (if they exist)
-    const filterMonth = document.getElementById('filterMonth');
-    const filterYear = document.getElementById('filterYear');
-    if (filterMonth) filterMonth.addEventListener('change', filterExpenses);
-    if (filterYear) filterYear.addEventListener('change', filterExpenses);
+    // Month and Year filters
+    on('filterMonth', 'change', filterExpenses);
+    on('filterYear', 'change', filterExpenses);
 
     // Receipt Upload
-    document.getElementById('expenseReceipt').addEventListener('change', handleReceiptUpload);
-    document.getElementById('captureReceiptBtn').addEventListener('click', captureReceipt);
+    on('expenseReceipt', 'change', handleReceiptUpload);
+    on('captureReceiptBtn', 'click', captureReceipt);
 }
 
 // Populate Select Dropdowns
