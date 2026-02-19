@@ -3,6 +3,7 @@ let financialData = null;
 let filteredExpenses = [];
 let categoryChart = null;
 let monthlyChart = null;
+let availableYears = []; // Anos disponíveis nos dados
 
 const MONTHS = [
     'JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL',
@@ -47,15 +48,33 @@ async function loadData() {
 
         // Preencher com dados da API
         // A API retorna expenses como array de {month, year, items}
+        const yearsSet = new Set();
         if (data.expenses && Array.isArray(data.expenses)) {
             data.expenses.forEach(monthData => {
                 const monthIndex = monthData.month;
+                const year = monthData.year;
                 const items = monthData.items || [];
+
                 if (monthIndex >= 0 && monthIndex < 12) {
-                    financialData.expenses[monthIndex] = items;
+                    // Adicionar ano a cada item de despesa
+                    const itemsWithYear = items.map(item => ({
+                        ...item,
+                        year: year
+                    }));
+
+                    // Concatenar aos itens existentes (permite múltiplos anos no mesmo mês)
+                    financialData.expenses[monthIndex] = [
+                        ...(financialData.expenses[monthIndex] || []),
+                        ...itemsWithYear
+                    ];
+
+                    if (year) yearsSet.add(year);
                 }
             });
         }
+
+        // Armazenar anos disponíveis ordenados
+        availableYears = Array.from(yearsSet).sort((a, b) => b - a); // Decrescente
 
         // Coletar fornecedores únicos das despesas
         const suppliersSet = new Set();
@@ -92,6 +111,24 @@ function initEmptyData() {
 
 // Preencher selects com opções
 function populateFilters() {
+    // Anos
+    const yearSelect = document.getElementById('filterYear');
+    yearSelect.innerHTML = '<option value="">Todos os Anos</option>';
+    availableYears.forEach(year => {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = year;
+        yearSelect.appendChild(option);
+    });
+
+    // Se só há um ano, selecionar automaticamente
+    if (availableYears.length === 1) {
+        yearSelect.value = availableYears[0];
+    } else if (availableYears.includes(new Date().getFullYear())) {
+        // Selecionar o ano atual por padrão se disponível
+        yearSelect.value = new Date().getFullYear();
+    }
+
     // Categorias
     const categorySelect = document.getElementById('filterCategory');
     categorySelect.innerHTML = '<option value="">Todas as Categorias</option>';
@@ -126,6 +163,7 @@ function populateFilters() {
 // Aplicar filtros
 function applyFilters() {
     const month = document.getElementById('filterMonth').value;
+    const year = document.getElementById('filterYear').value;
     const category = document.getElementById('filterCategory').value;
     const supplier = document.getElementById('filterSupplier').value;
     const paymentMethod = document.getElementById('filterPaymentMethod').value;
@@ -141,6 +179,9 @@ function applyFilters() {
 
         monthExpenses.forEach(expense => {
             let include = true;
+
+            // Filtro de ano
+            if (year && expense.year && expense.year.toString() !== year) include = false;
 
             if (category && expense.category !== category) include = false;
             if (supplier && expense.supplier !== supplier) include = false;
@@ -330,6 +371,7 @@ function updateMonthlyChart() {
 // Limpar filtros
 function clearFilters() {
     document.getElementById('filterMonth').value = '';
+    document.getElementById('filterYear').value = '';
     document.getElementById('filterCategory').value = '';
     document.getElementById('filterSupplier').value = '';
     document.getElementById('filterPaymentMethod').value = '';
