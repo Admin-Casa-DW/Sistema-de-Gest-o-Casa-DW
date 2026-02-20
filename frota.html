@@ -514,23 +514,21 @@
             }
 
             .frota-header {
-                flex-direction: column;
-                align-items: flex-start;
-                padding: 15px;
+                padding: 12px 15px;
             }
 
             .frota-header-left {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 10px;
+                flex-direction: row;
+                align-items: center;
+                width: 100%;
             }
 
             .frota-header-left img {
-                max-width: 100px;
+                height: 35px;
             }
 
             .frota-header-left h1 {
-                font-size: 18px;
+                font-size: 15px;
             }
 
             .frota-subtitle {
@@ -546,7 +544,7 @@
 
             .frota-header-right button {
                 font-size: 12px;
-                padding: 10px 12px;
+                padding: 8px 10px;
             }
 
             .status-cards {
@@ -671,7 +669,7 @@
 
         @media (max-width: 480px) {
             .frota-header-left h1 {
-                font-size: 16px;
+                font-size: 14px;
             }
 
             .frota-subtitle {
@@ -682,11 +680,19 @@
                 grid-template-columns: 1fr;
             }
 
+            /* Modal full screen mobile - slide up */
+            .modal-overlay {
+                padding: 0;
+                align-items: flex-end;
+            }
+
             .modal {
                 max-width: 100%;
+                width: 100%;
                 margin: 0;
-                border-radius: 0;
-                max-height: 100vh;
+                border-radius: 15px 15px 0 0;
+                max-height: 92vh;
+                overflow-y: auto;
             }
 
             .modal-close {
@@ -979,14 +985,8 @@
         </div>
     </div>
 
-    <script>
-        if (!sessionStorage.getItem("currentUser")) {
-            window.location.href = "index.html";
-        }
-    </script>
     <script src="config.js"></script>
     <script src="cloud-storage.js"></script>
     <script src="frota.js"></script>
 </body>
 </html>
-
