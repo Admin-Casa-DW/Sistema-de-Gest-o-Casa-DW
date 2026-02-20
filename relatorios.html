@@ -202,6 +202,135 @@
             background: #5a6268;
         }
 
+        /* Mobile Improvements */
+        @media (max-width: 768px) {
+            .reports-container {
+                padding: 10px;
+            }
+
+            .back-button {
+                font-size: 13px;
+                padding: 8px 15px;
+                margin-bottom: 15px;
+            }
+
+            .reports-container h1 {
+                font-size: 18px;
+                margin-bottom: 20px;
+            }
+
+            .filters-section {
+                padding: 15px;
+            }
+
+            .filters-title {
+                font-size: 16px;
+                margin-bottom: 15px;
+            }
+
+            .filters-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .filter-group label {
+                font-size: 13px;
+            }
+
+            .filter-group select,
+            .filter-group input {
+                font-size: 13px;
+                padding: 8px;
+            }
+
+            .filter-actions {
+                flex-wrap: wrap;
+            }
+
+            .filter-actions button {
+                font-size: 12px;
+                padding: 8px 12px;
+                flex: 1 1 calc(50% - 5px);
+            }
+
+            .results-section {
+                padding: 15px;
+            }
+
+            .results-title {
+                font-size: 16px;
+            }
+
+            .results-summary {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+
+            .summary-item {
+                padding: 12px;
+            }
+
+            .summary-item label {
+                font-size: 11px;
+            }
+
+            .summary-item .value {
+                font-size: 20px;
+            }
+
+            /* Table scroll horizontal */
+            #tableContainer {
+                overflow-x: auto;
+            }
+
+            .report-table {
+                font-size: 12px;
+                min-width: 700px;
+            }
+
+            .report-table th,
+            .report-table td {
+                padding: 8px 6px;
+                white-space: nowrap;
+            }
+
+            .chart-container {
+                padding: 15px;
+            }
+
+            .chart-title {
+                font-size: 15px;
+                margin-bottom: 15px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .reports-container h1 {
+                font-size: 16px;
+            }
+
+            .filters-title {
+                font-size: 15px;
+            }
+
+            .filter-actions button {
+                flex: 1 1 100%;
+                font-size: 13px;
+            }
+
+            .results-summary {
+                gap: 8px;
+            }
+
+            .summary-item .value {
+                font-size: 18px;
+            }
+
+            .report-table {
+                font-size: 11px;
+            }
+        }
+
         @media print {
             .filters-section,
             .back-button,
@@ -375,13 +504,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script>
-        if (!sessionStorage.getItem("currentUser")) {
-            window.location.href = "index.html";
-        }
-    </script>
     <script src="config.js"></script>
     <script src="relatorios.js"></script>
 </body>
 </html>
-
