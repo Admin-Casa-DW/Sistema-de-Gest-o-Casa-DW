@@ -1,0 +1,867 @@
+/* ==========================================
+   CASA DW - DARK THEME OVERRIDE
+   Sobrescreve estilos inline de todas as páginas
+   (frota.html, manutencoes.html, relatorios.html)
+   ========================================== */
+
+/* ==========================================
+   FROTA PAGE
+   ========================================== */
+
+/* Container & Header */
+.frota-container {
+    background: transparent;
+}
+
+.frota-header {
+    background: var(--bg-card) !important;
+    box-shadow: var(--shadow) !important;
+}
+
+.frota-header-left h1 {
+    color: var(--text-primary) !important;
+}
+
+.frota-header-left h1 i {
+    color: var(--primary) !important;
+}
+
+.frota-subtitle {
+    color: var(--text-secondary) !important;
+}
+
+/* Status Cards */
+.status-card {
+    background: var(--bg-card) !important;
+    box-shadow: var(--shadow) !important;
+}
+
+.status-card .card-value {
+    color: var(--text-primary) !important;
+}
+
+.status-card .card-label {
+    color: var(--text-secondary) !important;
+}
+
+/* Filters */
+.filters-section {
+    background: var(--bg-card) !important;
+    box-shadow: var(--shadow) !important;
+}
+
+.filter-group label {
+    color: var(--text-primary) !important;
+}
+
+.filter-group input,
+.filter-group select {
+    background: var(--bg-secondary) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-primary) !important;
+}
+
+.filter-group input:focus,
+.filter-group select:focus {
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15) !important;
+}
+
+/* Vehicles Table */
+.vehicles-section {
+    background: var(--bg-card) !important;
+    box-shadow: var(--shadow) !important;
+}
+
+.section-title {
+    color: var(--text-primary) !important;
+}
+
+.vehicles-table thead th {
+    background: var(--primary) !important;
+    color: white !important;
+    border-bottom: none !important;
+}
+
+.vehicles-table tbody tr {
+    border-bottom: 1px solid var(--border-color) !important;
+}
+
+.vehicles-table tbody tr:hover {
+    background: var(--bg-card-hover) !important;
+}
+
+.vehicles-table tbody td {
+    color: var(--text-primary) !important;
+}
+
+.vehicles-table .marca {
+    color: var(--text-secondary) !important;
+}
+
+.vehicles-table .modelo {
+    color: var(--text-primary) !important;
+}
+
+/* Badges - Dark Theme */
+.badge-success {
+    background: rgba(16, 185, 129, 0.15) !important;
+    color: var(--success) !important;
+}
+
+.badge-danger {
+    background: rgba(239, 68, 68, 0.15) !important;
+    color: var(--danger) !important;
+}
+
+.badge-warning {
+    background: rgba(245, 158, 11, 0.15) !important;
+    color: var(--warning) !important;
+}
+
+.badge-info {
+    background: rgba(59, 130, 246, 0.15) !important;
+    color: var(--info) !important;
+}
+
+.badge-primary {
+    background: rgba(99, 102, 241, 0.15) !important;
+    color: var(--primary) !important;
+}
+
+/* KM Progress */
+.km-progress {
+    background: var(--bg-secondary) !important;
+}
+
+/* Action Buttons - Icon style */
+.btn-icon.edit {
+    background: rgba(59, 130, 246, 0.15) !important;
+    color: var(--info) !important;
+}
+
+.btn-icon.edit:hover {
+    background: rgba(59, 130, 246, 0.25) !important;
+}
+
+.btn-icon.delete {
+    background: rgba(239, 68, 68, 0.15) !important;
+    color: var(--danger) !important;
+}
+
+.btn-icon.delete:hover {
+    background: rgba(239, 68, 68, 0.25) !important;
+}
+
+.btn-icon.view {
+    background: rgba(16, 185, 129, 0.15) !important;
+    color: var(--success) !important;
+}
+
+.btn-icon.view:hover {
+    background: rgba(16, 185, 129, 0.25) !important;
+}
+
+.btn-icon.history {
+    background: rgba(245, 158, 11, 0.15) !important;
+    color: var(--warning) !important;
+}
+
+.btn-icon.history:hover {
+    background: rgba(245, 158, 11, 0.25) !important;
+}
+
+/* Frota Buttons */
+.btn-sm.btn-primary {
+    background: var(--primary) !important;
+    color: white !important;
+}
+
+.btn-sm.btn-primary:hover {
+    background: var(--primary-hover) !important;
+}
+
+.btn-sm.btn-secondary {
+    background: var(--secondary) !important;
+    color: white !important;
+}
+
+.btn-sm.btn-secondary:hover {
+    background: #475569 !important;
+}
+
+/* Alerts */
+.alerts-section {
+    background: var(--bg-card) !important;
+    box-shadow: var(--shadow) !important;
+}
+
+.alerts-title {
+    color: var(--text-primary) !important;
+}
+
+.alert-item {
+    border-bottom-color: var(--border-color) !important;
+}
+
+.alert-item:hover {
+    background: var(--bg-card-hover) !important;
+}
+
+.alert-info strong {
+    color: var(--text-primary) !important;
+}
+
+.alert-info small {
+    color: var(--text-secondary) !important;
+}
+
+.alert-icon.overdue {
+    background: rgba(239, 68, 68, 0.15) !important;
+    color: var(--danger) !important;
+}
+
+.alert-icon.soon {
+    background: rgba(245, 158, 11, 0.15) !important;
+    color: var(--warning) !important;
+}
+
+.alert-group-overdue {
+    background: rgba(239, 68, 68, 0.1) !important;
+    color: var(--danger) !important;
+}
+
+.alert-group-soon {
+    background: rgba(245, 158, 11, 0.1) !important;
+    color: var(--warning) !important;
+}
+
+.alert-item.alert-overdue {
+    background: rgba(239, 68, 68, 0.05) !important;
+    border-bottom-color: rgba(239, 68, 68, 0.2) !important;
+}
+
+.alert-item.alert-soon {
+    background: transparent !important;
+}
+
+.soon-urgent {
+    background: rgba(245, 158, 11, 0.05) !important;
+    border-bottom-color: rgba(245, 158, 11, 0.2) !important;
+}
+
+.soon-normal {
+    background: transparent !important;
+    border-bottom-color: var(--border-color) !important;
+}
+
+.btn-alert-action {
+    background: var(--bg-secondary) !important;
+    color: var(--text-secondary) !important;
+    border-color: var(--border-color) !important;
+}
+
+.btn-alert-action:hover {
+    background: var(--bg-card-hover) !important;
+    color: var(--text-primary) !important;
+}
+
+/* Modals - Frota */
+.modal-overlay {
+    background: rgba(0, 0, 0, 0.7) !important;
+    backdrop-filter: blur(4px);
+}
+
+.frota-container .modal,
+.modal-overlay .modal {
+    background: var(--bg-card) !important;
+    box-shadow: var(--shadow-xl) !important;
+}
+
+.modal-header {
+    border-bottom-color: var(--border-color) !important;
+}
+
+.modal-header h2,
+.modal-title {
+    color: var(--text-primary) !important;
+}
+
+.modal-close {
+    color: var(--text-secondary) !important;
+}
+
+.modal-close:hover {
+    color: var(--danger) !important;
+}
+
+.modal-footer {
+    border-top-color: var(--border-color) !important;
+}
+
+/* Form Groups - all pages */
+.modal-body .form-group label,
+.modal-box .form-group label {
+    color: var(--text-primary) !important;
+}
+
+.modal-body .form-group input,
+.modal-body .form-group select,
+.modal-body .form-group textarea,
+.modal-box .form-group input,
+.modal-box .form-group select,
+.modal-box .form-group textarea {
+    background: var(--bg-secondary) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-primary) !important;
+}
+
+.modal-body .form-group input:focus,
+.modal-body .form-group select:focus,
+.modal-body .form-group textarea:focus,
+.modal-box .form-group input:focus,
+.modal-box .form-group select:focus,
+.modal-box .form-group textarea:focus {
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15) !important;
+}
+
+/* Detail View */
+.detail-label {
+    color: var(--text-secondary) !important;
+}
+
+.detail-value {
+    color: var(--text-primary) !important;
+}
+
+/* History */
+.history-item {
+    border-bottom-color: var(--border-color) !important;
+}
+
+.history-date {
+    color: var(--text-secondary) !important;
+}
+
+.history-desc {
+    color: var(--text-primary) !important;
+}
+
+.history-km {
+    color: var(--text-primary) !important;
+}
+
+.no-history {
+    color: var(--text-secondary) !important;
+}
+
+/* Vehicle Tabs */
+.vehicle-tabs {
+    border-bottom-color: var(--border-color) !important;
+}
+
+.vehicle-tab {
+    color: var(--text-secondary) !important;
+}
+
+.vehicle-tab:hover:not(.active) {
+    background: var(--bg-card-hover) !important;
+    color: var(--text-primary) !important;
+}
+
+.vehicle-tab.active {
+    color: var(--primary) !important;
+    border-bottom-color: var(--primary) !important;
+}
+
+/* Invoice/Document Items */
+.invoice-item {
+    background: var(--bg-secondary) !important;
+    border-color: var(--border-color) !important;
+}
+
+.invoice-item:hover {
+    background: var(--bg-card-hover) !important;
+}
+
+.invoice-name {
+    color: var(--text-primary) !important;
+}
+
+.invoice-obs {
+    background: var(--bg-card) !important;
+    color: var(--text-secondary) !important;
+}
+
+.invoice-obs-input {
+    background: var(--bg-card) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-primary) !important;
+}
+
+.invoice-meta {
+    color: var(--text-secondary) !important;
+}
+
+/* Abastecimento */
+.abastecimento-form {
+    background: var(--bg-secondary) !important;
+}
+
+.abastecimento-form h3 {
+    color: var(--text-primary) !important;
+}
+
+.abastecimento-item {
+    background: var(--bg-secondary) !important;
+    border-color: var(--border-color) !important;
+}
+
+.abastecimento-item:hover {
+    background: var(--bg-card-hover) !important;
+}
+
+.abast-date {
+    color: var(--text-primary) !important;
+}
+
+.abast-details {
+    color: var(--text-secondary) !important;
+}
+
+.obs-text {
+    color: var(--text-secondary) !important;
+}
+
+/* ==========================================
+   MANUTENÇÕES PAGE
+   ========================================== */
+
+.manut-container {
+    background: transparent;
+}
+
+.manut-header {
+    background: var(--bg-card) !important;
+    box-shadow: var(--shadow) !important;
+}
+
+.manut-header-left h1 {
+    color: var(--text-primary) !important;
+}
+
+.manut-header-left h1 i {
+    color: var(--primary) !important;
+}
+
+/* Manutenção Cards */
+.manut-card {
+    background: var(--bg-card) !important;
+    box-shadow: var(--shadow) !important;
+}
+
+.manut-card-info .value {
+    color: var(--text-primary) !important;
+}
+
+.manut-card-info h3 {
+    color: var(--text-secondary) !important;
+}
+
+/* Tabs */
+.manut-tabs {
+    background: var(--bg-card) !important;
+    box-shadow: var(--shadow) !important;
+}
+
+.manut-tab {
+    color: var(--text-secondary) !important;
+}
+
+.manut-tab:hover:not(.active) {
+    background: var(--bg-card-hover) !important;
+    color: var(--text-primary) !important;
+}
+
+.manut-tab.active {
+    color: var(--primary) !important;
+    border-bottom-color: var(--primary) !important;
+}
+
+/* Calendar */
+.agenda-section {
+    background: var(--bg-card) !important;
+    box-shadow: var(--shadow) !important;
+}
+
+.calendar-header {
+    color: var(--text-secondary) !important;
+}
+
+.calendar-day {
+    border-color: var(--border-color) !important;
+}
+
+.calendar-day:hover {
+    background: var(--bg-card-hover) !important;
+}
+
+.calendar-day.today {
+    background: rgba(99, 102, 241, 0.1) !important;
+}
+
+.calendar-day.other-month {
+    background: var(--bg-secondary) !important;
+}
+
+.calendar-day-num {
+    color: var(--text-primary) !important;
+}
+
+.calendar-day.other-month .calendar-day-num {
+    color: var(--text-muted) !important;
+}
+
+/* Calendar Events */
+.calendar-event.status-pendente {
+    background: rgba(245, 158, 11, 0.15) !important;
+    color: var(--warning) !important;
+}
+
+.calendar-event.status-em_andamento {
+    background: rgba(59, 130, 246, 0.15) !important;
+    color: var(--info) !important;
+}
+
+.calendar-event.status-concluida {
+    background: rgba(16, 185, 129, 0.15) !important;
+    color: var(--success) !important;
+}
+
+.calendar-event.status-vencida {
+    background: rgba(239, 68, 68, 0.15) !important;
+    color: var(--danger) !important;
+}
+
+/* Status Badges */
+.status-badge.pendente {
+    background: rgba(245, 158, 11, 0.15) !important;
+    color: var(--warning) !important;
+}
+
+.status-badge.em_andamento {
+    background: rgba(59, 130, 246, 0.15) !important;
+    color: var(--info) !important;
+}
+
+.status-badge.concluida {
+    background: rgba(16, 185, 129, 0.15) !important;
+    color: var(--success) !important;
+}
+
+.status-badge.vencida {
+    background: rgba(239, 68, 68, 0.15) !important;
+    color: var(--danger) !important;
+}
+
+/* Manutenção Table */
+.table-section {
+    background: var(--bg-card) !important;
+    box-shadow: var(--shadow) !important;
+}
+
+.table-title {
+    color: var(--text-primary) !important;
+}
+
+.manut-table thead th {
+    background: var(--primary) !important;
+    color: white !important;
+    border-bottom: none !important;
+}
+
+.manut-table tbody td {
+    border-bottom-color: var(--border-color) !important;
+    color: var(--text-primary) !important;
+}
+
+.manut-table tbody tr:hover {
+    background: var(--bg-card-hover) !important;
+}
+
+/* Table Filters */
+.table-filters input,
+.table-filters select {
+    background: var(--bg-secondary) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-primary) !important;
+}
+
+.table-filters input:focus,
+.table-filters select:focus {
+    border-color: var(--primary) !important;
+}
+
+/* Manutenção Action Buttons */
+.action-btn.edit {
+    background: rgba(59, 130, 246, 0.15) !important;
+    color: var(--info) !important;
+}
+
+.action-btn.delete {
+    background: rgba(239, 68, 68, 0.15) !important;
+    color: var(--danger) !important;
+}
+
+.action-btn.view {
+    background: rgba(16, 185, 129, 0.15) !important;
+    color: var(--success) !important;
+}
+
+.action-btn.edit:hover {
+    background: rgba(59, 130, 246, 0.25) !important;
+}
+
+.action-btn.delete:hover {
+    background: rgba(239, 68, 68, 0.25) !important;
+}
+
+.action-btn.view:hover {
+    background: rgba(16, 185, 129, 0.25) !important;
+}
+
+/* Manutenção Modal */
+.modal-box {
+    background: var(--bg-card) !important;
+    box-shadow: var(--shadow-xl) !important;
+}
+
+.modal-box .modal-title {
+    color: var(--text-primary) !important;
+}
+
+/* Upload Area */
+.upload-area {
+    background: var(--bg-secondary) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-secondary) !important;
+}
+
+.upload-area:hover {
+    border-color: var(--primary) !important;
+    color: var(--primary) !important;
+    background: rgba(99, 102, 241, 0.05) !important;
+}
+
+/* Photo Items */
+.photo-item img,
+.upload-preview-item img {
+    border-color: var(--border-color) !important;
+}
+
+.photo-item a {
+    background: rgba(59, 130, 246, 0.15) !important;
+    color: var(--info) !important;
+}
+
+.file-name {
+    color: var(--text-secondary) !important;
+}
+
+/* Notification Count */
+.notification-count {
+    background: var(--danger) !important;
+    color: white !important;
+}
+
+/* Contract Cards */
+.contract-card {
+    background: var(--bg-card) !important;
+    border-color: var(--border-color) !important;
+    box-shadow: var(--shadow) !important;
+}
+
+.contract-card:hover {
+    border-color: var(--primary) !important;
+}
+
+.contract-details {
+    color: var(--text-primary) !important;
+}
+
+.contract-file-preview {
+    background: var(--bg-secondary) !important;
+}
+
+.btn-contract-action {
+    background: var(--bg-secondary) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-secondary) !important;
+}
+
+.btn-contract-action:hover {
+    background: var(--bg-card-hover) !important;
+    color: var(--text-primary) !important;
+}
+
+/* ==========================================
+   RELATÓRIOS PAGE
+   ========================================== */
+
+.filters-section {
+    background: var(--bg-card) !important;
+    box-shadow: var(--shadow) !important;
+}
+
+.filters-title {
+    color: var(--text-primary) !important;
+}
+
+.results-section {
+    background: var(--bg-card) !important;
+    box-shadow: var(--shadow) !important;
+}
+
+.results-title {
+    color: var(--text-primary) !important;
+}
+
+/* Summary Items */
+.summary-item.total {
+    background: rgba(16, 185, 129, 0.15) !important;
+    border-left-color: var(--success) !important;
+}
+
+.summary-item.count {
+    background: rgba(59, 130, 246, 0.15) !important;
+    border-left-color: var(--info) !important;
+}
+
+.summary-item.average {
+    background: rgba(245, 158, 11, 0.15) !important;
+    border-left-color: var(--warning) !important;
+}
+
+.summary-item label {
+    color: var(--text-secondary) !important;
+}
+
+.summary-item .value {
+    color: var(--text-primary) !important;
+}
+
+/* Report Table */
+.report-table thead {
+    background: var(--primary) !important;
+}
+
+.report-table th {
+    color: white !important;
+    border-bottom: none !important;
+}
+
+.report-table td {
+    border-bottom-color: var(--border-color) !important;
+    color: var(--text-primary) !important;
+}
+
+.report-table tbody tr:hover {
+    background: var(--bg-card-hover) !important;
+}
+
+/* Chart Container */
+.chart-container {
+    background: var(--bg-card) !important;
+    box-shadow: var(--shadow) !important;
+}
+
+.chart-title {
+    color: var(--text-primary) !important;
+}
+
+.no-data {
+    color: var(--text-secondary) !important;
+}
+
+/* Back Button */
+.back-button {
+    background: var(--secondary) !important;
+}
+
+.back-button:hover {
+    background: #475569 !important;
+}
+
+/* Results Info */
+#resultsInfo {
+    color: var(--text-secondary) !important;
+}
+
+/* ==========================================
+   UNIVERSAL - ALL PAGES
+   ========================================== */
+
+/* Option elements in selects */
+option {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+
+/* Placeholder text */
+::placeholder {
+    color: var(--text-muted) !important;
+    opacity: 1;
+}
+
+/* Links */
+a {
+    color: var(--primary);
+}
+
+a:hover {
+    color: var(--primary-hover);
+}
+
+/* Selection */
+::selection {
+    background: rgba(99, 102, 241, 0.3);
+    color: white;
+}
+
+/* Print override */
+@media print {
+    body {
+        background: white !important;
+        color: black !important;
+    }
+
+    .data-table th,
+    .vehicles-table thead th,
+    .manut-table thead th,
+    .report-table thead {
+        background: #333 !important;
+        color: white !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}

@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste Upload PDF Combinado</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            border-left: 4px solid #3498db;
+        }
+        button {
+            background: #3498db;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        button:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+        }
+        .log {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 3px 0;
+        }
+        .log-success { color: #2ecc71; }
+        .log-error { color: #e74c3c; }
+        .log-info { color: #3498db; }
+        .log-warning { color: #f39c12; }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e8f5e9;
+            border-radius: 5px;
+            border-left: 4px solid #4caf50;
+        }
+        .result a {
+            color: #2980b9;
+            word-break: break-all;
+        }
+        input[type="file"] {
+            margin: 10px 0;
+            padding: 10px;
+            border: 2px dashed #3498db;
+            border-radius: 5px;
+            width: 100%;
+        }
+        .preview {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 15px 0;
+        }
+        .preview img {
+            width: 150px;
+            height: 150px;
+            object-fit: cover;
+            border-radius: 5px;
+            border: 2px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Teste: Upload de PDF Combinado</h1>
+
+        <div class="test-section">
+            <h3>Passo 1: Selecionar Imagens</h3>
+            <p>Selecione 2-3 imagens para testar o merge em PDF:</p>
+            <input type="file" id="fileInput" accept="image/*" multiple>
+            <div id="preview" class="preview"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>Passo 2: Processar e Enviar</h3>
+            <button id="testBtn" onclick="runTest()" disabled>Executar Teste Completo</button>
+            <button onclick="clearLog()">Limpar Log</button>
+        </div>
+
+        <div id="log" class="log"></div>
+        <div id="result" style="display:none;" class="result"></div>
+    </div>
+
+    <script>
+        const API_URL = 'http://191.252.210.91:3000';
+        const fileInput = document.getElementById('fileInput');
+        const testBtn = document.getElementById('testBtn');
+        let selectedFiles = [];
+
+        fileInput.addEventListener('change', (e) => {
+            selectedFiles = Array.from(e.target.files);
+            const preview = document.getElementById('preview');
+            preview.innerHTML = '';
+
+            if (selectedFiles.length > 0) {
+                testBtn.disabled = false;
+                log(`✅ ${selectedFiles.length} imagem(ns) selecionada(s)`, 'success');
+
+                selectedFiles.forEach(file => {
+                    const img = document.createElement('img');
+                    img.src = URL.createObjectURL(file);
+                    preview.appendChild(img);
+                });
+            } else {
+                testBtn.disabled = true;
+            }
+        });
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            const timestamp = new Date().toLocaleTimeString();
+            entry.textContent = `[${timestamp}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+            document.getElementById('result').style.display = 'none';
+        }
+
+        async function compressImage(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+
+                        const MAX_WIDTH = 1920;
+                        const MAX_HEIGHT = 1920;
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > MAX_WIDTH || height > MAX_HEIGHT) {
+                            const ratio = Math.min(MAX_WIDTH / width, MAX_HEIGHT / height);
+                            width = Math.floor(width * ratio);
+                            height = Math.floor(height * ratio);
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.75);
+                        resolve(compressedDataUrl);
+                    };
+                    img.onerror = reject;
+                    img.src = e.target.result;
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function mergeFilesIntoPDF(files) {
+            log('📄 Iniciando merge das imagens em PDF...', 'info');
+            const { jsPDF } = window.jspdf;
+
+            if (!jsPDF) {
+                throw new Error('jsPDF não carregado');
+            }
+
+            const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+            const pageW = pdf.internal.pageSize.getWidth();
+            const pageH = pdf.internal.pageSize.getHeight();
+            let firstPage = true;
+
+            for (let i = 0; i < files.length; i++) {
+                log(`  → Processando imagem ${i + 1}/${files.length}...`, 'info');
+
+                const compressedDataUrl = await compressImage(files[i]);
+                const img = await loadImage(compressedDataUrl);
+
+                const imgW = img.naturalWidth;
+                const imgH = img.naturalHeight;
+                const ratio = imgW / imgH;
+
+                const margin = 10;
+                const maxW = pageW - margin * 2;
+                const maxH = pageH - margin * 2;
+
+                let drawW = maxW;
+                let drawH = drawW / ratio;
+
+                if (drawH > maxH) {
+                    drawH = maxH;
+                    drawW = drawH * ratio;
+                }
+
+                const x = (pageW - drawW) / 2;
+                const y = (pageH - drawH) / 2;
+
+                if (!firstPage) pdf.addPage();
+                firstPage = false;
+
+                pdf.addImage(compressedDataUrl, 'JPEG', x, y, drawW, drawH);
+            }
+
+            const pdfOutput = pdf.output('datauristring');
+            log('✅ PDF gerado com sucesso!', 'success');
+            log(`  → Tamanho original do data URL: ${(pdfOutput.length / 1024).toFixed(2)} KB`, 'info');
+
+            return pdfOutput;
+        }
+
+        function loadImage(src) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = src;
+            });
+        }
+
+        async function uploadToCloudinary(pdfDataUrl) {
+            log('☁️  Preparando upload para Cloudinary...', 'info');
+
+            // Sanitizar o data URL (remover filename= se existir)
+            const base64Match = pdfDataUrl.match(/base64,(.+)$/);
+            if (!base64Match) {
+                throw new Error('Data URL inválido - não contém base64');
+            }
+
+            const cleanPdfDataUrl = `data:application/pdf;base64,${base64Match[1]}`;
+            log(`✅ Data URL sanitizado`, 'success');
+            log(`  → Tamanho após sanitização: ${(cleanPdfDataUrl.length / 1024).toFixed(2)} KB`, 'info');
+
+            log('📤 Enviando para Cloudinary...', 'info');
+
+            const response = await fetch(`${API_URL}/api/upload`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    file: cleanPdfDataUrl,
+                    filename: `teste_${Date.now()}.pdf`,
+                    userId: 'admin'
+                })
+            });
+
+            const result = await response.json();
+
+            if (!result.success) {
+                throw new Error(result.error || 'Erro desconhecido no upload');
+            }
+
+            log('✅ Upload concluído com sucesso!', 'success');
+            return result;
+        }
+
+        async function runTest() {
+            if (selectedFiles.length === 0) {
+                alert('Selecione pelo menos uma imagem!');
+                return;
+            }
+
+            testBtn.disabled = true;
+            document.getElementById('result').style.display = 'none';
+
+            try {
+                log('🚀 Iniciando teste completo...', 'info');
+                log(`📋 Total de imagens: ${selectedFiles.length}`, 'info');
+
+                // Passo 1: Merge
+                const pdfDataUrl = await mergeFilesIntoPDF(selectedFiles);
+
+                // Passo 2: Upload
+                const uploadResult = await uploadToCloudinary(pdfDataUrl);
+
+                // Mostrar resultado
+                log('', 'info');
+                log('═══════════════════════════════════', 'success');
+                log('✅ TESTE CONCLUÍDO COM SUCESSO!', 'success');
+                log('═══════════════════════════════════', 'success');
+                log(`URL: ${uploadResult.url}`, 'success');
+                log(`Public ID: ${uploadResult.publicId}`, 'success');
+
+                const resultDiv = document.getElementById('result');
+                resultDiv.innerHTML = `
+                    <h3>✅ Resultado do Teste</h3>
+                    <p><strong>Imagens processadas:</strong> ${selectedFiles.length}</p>
+                    <p><strong>URL do PDF:</strong><br><a href="${uploadResult.url}" target="_blank">${uploadResult.url}</a></p>
+                    <p><strong>Public ID:</strong> ${uploadResult.publicId}</p>
+                    <p><a href="${uploadResult.url}" target="_blank" style="display:inline-block; margin-top:10px; padding:10px 20px; background:#2ecc71; color:white; text-decoration:none; border-radius:5px;">📄 Visualizar PDF</a></p>
+                `;
+                resultDiv.style.display = 'block';
+
+            } catch (error) {
+                log('', 'error');
+                log('═══════════════════════════════════', 'error');
+                log('❌ ERRO NO TESTE', 'error');
+                log('═══════════════════════════════════', 'error');
+                log(`Erro: ${error.message}`, 'error');
+                console.error(error);
+
+                const resultDiv = document.getElementById('result');
+                resultDiv.innerHTML = `
+                    <h3 style="color:#e74c3c;">❌ Erro no Teste</h3>
+                    <p><strong>Mensagem:</strong> ${error.message}</p>
+                `;
+                resultDiv.style.display = 'block';
+                resultDiv.style.background = '#ffebee';
+                resultDiv.style.borderColor = '#e74c3c';
+            } finally {
+                testBtn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

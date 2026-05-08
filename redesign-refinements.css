@@ -1,0 +1,936 @@
+/* =====================================================
+   REDESIGN V2 - REFINEMENTS
+   Page headers, Ações Rápidas, KPI variations
+   ===================================================== */
+
+/* =====================================================
+   PAGE HEADER (all pages)
+   Title + Subtitle + optional action area
+   ===================================================== */
+.page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 24px 0 20px 0;
+    margin-bottom: 8px;
+}
+
+.page-header-left h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text-primary, #fff);
+    margin: 0 0 4px 0;
+    line-height: 1.2;
+}
+
+.page-header-left p {
+    font-size: 14px;
+    color: var(--text-secondary, #9ca3af);
+    margin: 0;
+}
+
+.page-header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.page-header-right .month-badge {
+    background: var(--bg-card, #2a3142);
+    border: 1px solid var(--border-color, #374151);
+    color: var(--text-primary, #fff);
+    padding: 10px 24px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+/* =====================================================
+   AÇÕES RÁPIDAS WIDGET (Dashboard)
+   ===================================================== */
+.quick-actions {
+    background: var(--bg-card, #2a3142);
+    border-radius: 16px;
+    padding: 24px;
+    border: 1px solid var(--border-color, #374151);
+}
+
+.quick-actions h2 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary, #fff);
+    margin: 0 0 16px 0;
+}
+
+.quick-actions .quick-action-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: var(--bg-card-hover, #303849);
+    border-radius: 10px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    color: var(--text-primary, #fff);
+    font-size: 14px;
+    font-weight: 500;
+    border: none;
+    width: 100%;
+    text-align: left;
+}
+
+.quick-action-item:last-child {
+    margin-bottom: 0;
+}
+
+.quick-action-item:hover {
+    background: rgba(99, 102, 241, 0.15);
+    transform: translateX(4px);
+}
+
+.quick-action-item .qa-indicator {
+    width: 4px;
+    height: 28px;
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
+.quick-action-item .qa-indicator.green { background: var(--success, #10b981); }
+.quick-action-item .qa-indicator.orange { background: var(--warning, #f59e0b); }
+.quick-action-item .qa-indicator.blue { background: var(--info, #3b82f6); }
+.quick-action-item .qa-indicator.purple { background: var(--primary, #6366f1); }
+
+/* =====================================================
+   KPI VARIATION INDICATORS
+   ===================================================== */
+.card-variation {
+    font-size: 12px;
+    margin-top: 4px;
+    font-weight: 500;
+}
+
+.card-variation.positive {
+    color: var(--success, #10b981);
+}
+
+.card-variation.negative {
+    color: var(--danger, #ef4444);
+}
+
+.card-variation.neutral {
+    color: var(--text-muted, #6b7280);
+}
+
+/* =====================================================
+   FROTA PAGE - Header refinements
+   Remove duplicate logo, use clean page header
+   ===================================================== */
+body.has-sidebar .frota-header {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 24px !important;
+    margin-bottom: 0 !important;
+    display: flex !important;
+    align-items: flex-start !important;
+    justify-content: space-between !important;
+    flex-wrap: wrap !important;
+    gap: 16px !important;
+}
+
+body.has-sidebar .frota-header-left {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 4px !important;
+}
+
+body.has-sidebar .frota-header-left img {
+    display: none !important;
+}
+
+body.has-sidebar .frota-header-left h1 {
+    font-size: 28px !important;
+    font-weight: 700 !important;
+    color: var(--text-primary) !important;
+}
+
+body.has-sidebar .frota-header-left h1 i {
+    display: none !important;
+}
+
+body.has-sidebar .frota-subtitle {
+    font-size: 14px !important;
+    color: var(--text-secondary) !important;
+}
+
+body.has-sidebar .frota-header-right {
+    padding-top: 8px !important;
+}
+
+/* FIX 2026-05-08: revertido — usuário precisa dos botões Voltar/Imprimir.
+body.has-sidebar #btnVoltar { display: none !important; }
+body.has-sidebar #btnImprimir { display: none !important; }
+*/
+
+/* =====================================================
+   MANUTENÇÕES PAGE - Header refinements
+   ===================================================== */
+body.has-sidebar .manut-header {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 24px !important;
+    margin-bottom: 0 !important;
+    display: flex !important;
+    align-items: flex-start !important;
+    justify-content: space-between !important;
+    flex-wrap: wrap !important;
+    gap: 16px !important;
+}
+
+body.has-sidebar .manut-header-left {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 4px !important;
+}
+
+body.has-sidebar .manut-header-left img {
+    display: none !important;
+}
+
+body.has-sidebar .manut-header-left h1 {
+    font-size: 28px !important;
+    font-weight: 700 !important;
+    color: var(--text-primary) !important;
+}
+
+body.has-sidebar .manut-header-left h1 i {
+    display: none !important;
+}
+
+/* Hide the Dashboard back button when sidebar exists */
+body.has-sidebar .manut-header-right .btn-secondary[onclick*="index.html"] {
+    display: none !important;
+}
+
+/* =====================================================
+   RELATÓRIOS PAGE - Header refinements
+   ===================================================== */
+body.has-sidebar .reports-container > h1:first-of-type,
+body.has-sidebar .reports-container > .page-title {
+    font-size: 28px !important;
+    font-weight: 700 !important;
+}
+
+/* =====================================================
+   EXPENSES + AÇÕES RÁPIDAS ROW LAYOUT
+   Side by side: expenses table (flex) + quick actions (fixed width)
+   ===================================================== */
+.expenses-actions-row {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 24px;
+    align-items: start;
+}
+
+.expenses-actions-row .expenses-section {
+    min-width: 0;
+}
+
+.expenses-actions-row .quick-actions {
+    position: sticky;
+    top: 24px;
+}
+
+@media (max-width: 1200px) {
+    .expenses-actions-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* =====================================================
+   RESPONSIVE
+   ===================================================== */
+@media (max-width: 1024px) {
+    .page-header {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .page-header-left h1 {
+        font-size: 22px;
+    }
+
+    body.has-sidebar .frota-header-left h1,
+    body.has-sidebar .manut-header-left h1 {
+        font-size: 22px !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .page-header-left h1 {
+        font-size: 20px;
+    }
+
+    .quick-actions {
+        padding: 16px;
+    }
+
+    body.has-sidebar .frota-header,
+    body.has-sidebar .manut-header {
+        padding: 0 16px !important;
+    }
+}
+
+/* =====================================================
+   LOGIN PAGE - Match mockup (simplified title, footer)
+   ===================================================== */
+.login-page .login-header h1 {
+    font-size: 24px !important;
+    font-weight: 700 !important;
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+}
+
+.login-page .login-form label i {
+    display: none !important;
+}
+
+/* =====================================================
+   DASHBOARD - Hide extra sections not in mockup
+   (Entradas do Mês, Resumo por Categoria, Notas)
+   ===================================================== */
+body.has-sidebar .income-section {
+    display: none !important;
+}
+
+body.has-sidebar .content-grid > section:has(.category-summary) {
+    display: none !important;
+}
+
+body.has-sidebar .content-grid > section.notes-section,
+body.has-sidebar .notes-section {
+    display: none !important;
+}
+
+/* Fallback for browsers that don't support :has() */
+body.has-sidebar .category-summary-section {
+    display: none !important;
+}
+
+body.has-sidebar section.notes-section {
+    display: none !important;
+}
+
+/* =====================================================
+   DASHBOARD - KPI cards always 3 columns
+   ===================================================== */
+body.has-sidebar .dashboard {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 20px !important;
+}
+
+body.has-sidebar .summary-card {
+    width: 100% !important;
+    min-width: 0 !important;
+}
+
+/* =====================================================
+   DASHBOARD - Donut chart center label
+   ===================================================== */
+.chart-center-label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.chart-center-label .center-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary, #fff);
+    line-height: 1.2;
+}
+
+.chart-center-label .center-label {
+    font-size: 12px;
+    color: var(--text-muted, #6b7280);
+    margin-top: 2px;
+}
+
+/* Make chart container relative for center label positioning */
+body.has-sidebar .charts-container > section:first-child,
+body.has-sidebar .charts-container > .chart-box:first-child {
+    position: relative !important;
+}
+
+body.has-sidebar .charts-container > section:first-child canvas,
+body.has-sidebar .charts-container > .chart-box:first-child canvas {
+    position: relative;
+    z-index: 1;
+}
+
+/* =====================================================
+   RELATÓRIOS - Summary cards with colored top borders
+   ===================================================== */
+body.has-sidebar .reports-container .results-summary .summary-item:nth-child(1) {
+    border-top: 3px solid var(--danger, #ef4444) !important;
+}
+
+body.has-sidebar .reports-container .results-summary .summary-item:nth-child(2) {
+    border-top: 3px solid var(--info, #3b82f6) !important;
+}
+
+body.has-sidebar .reports-container .results-summary .summary-item:nth-child(3) {
+    border-top: 3px solid var(--primary, #6366f1) !important;
+}
+
+/* Fallback for .summary-cards layout */
+body.has-sidebar .reports-container .summary-cards .summary-card:nth-child(1) {
+    border-top: 3px solid var(--danger, #ef4444) !important;
+}
+
+body.has-sidebar .reports-container .summary-cards .summary-card:nth-child(2) {
+    border-top: 3px solid var(--info, #3b82f6) !important;
+}
+
+body.has-sidebar .reports-container .summary-cards .summary-card:nth-child(3) {
+    border-top: 3px solid var(--primary, #6366f1) !important;
+}
+
+/* =====================================================
+   RELATÓRIOS - Charts section at bottom
+   ===================================================== */
+.reports-charts-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-top: 24px;
+}
+
+.reports-charts-row .report-chart-card {
+    background: var(--bg-card, #2a3142);
+    border-radius: 16px;
+    padding: 24px;
+    border: 1px solid var(--border-color, #374151);
+    position: relative;
+}
+
+.reports-charts-row .report-chart-card h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary, #fff);
+    margin: 0 0 20px 0;
+}
+
+.reports-charts-row .report-chart-card canvas {
+    width: 100% !important;
+    max-height: 280px;
+}
+
+.report-chart-center-label {
+    position: absolute;
+    top: 55%;
+    left: 35%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    pointer-events: none;
+}
+
+.report-chart-center-label .center-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary, #fff);
+}
+
+.report-chart-center-label .center-label {
+    font-size: 11px;
+    color: var(--text-muted, #6b7280);
+}
+
+@media (max-width: 1024px) {
+    .reports-charts-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* =====================================================
+   LOGIN PAGE - Button purple, hide icon, smaller logo
+   ===================================================== */
+.login-page .login-form .btn-login,
+.login-page .login-form button[type="submit"] {
+    background: var(--primary, #6366f1) !important;
+    background-image: none !important;
+    border-color: var(--primary, #6366f1) !important;
+}
+
+.login-page .login-form .btn-login:hover,
+.login-page .login-form button[type="submit"]:hover {
+    background: #4f46e5 !important;
+    border-color: #4f46e5 !important;
+}
+
+/* Hide icon inside login button */
+.login-page .login-form .btn-login i,
+.login-page .login-form button[type="submit"] i {
+    display: none !important;
+}
+
+/* Reduce login logo size */
+.login-page .login-header img {
+    max-width: 80px !important;
+    max-height: 80px !important;
+    width: 80px !important;
+    height: auto !important;
+    border-radius: 12px;
+}
+
+/* Login footer - positioned at bottom of page, outside the card */
+.login-page .login-footer {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    color: var(--text-muted, #6b7280);
+    font-size: 12px;
+    padding: 0 20px;
+    opacity: 0.7;
+    z-index: 10;
+}
+
+/* Remove any footer inside the login-container (old position) */
+.login-page .login-container > .login-footer {
+    display: none !important;
+}
+
+/* =====================================================
+   RELATÓRIOS - Hide original large chart sections
+   (Keep only the injected #reportsChartsRow)
+   ===================================================== */
+body.has-sidebar .reports-container > .chart-container {
+    display: none !important;
+}
+
+/* =====================================================
+   MANUTENÇÕES - Calendar + Alerts side-by-side
+   Mockup: Calendar (left ~65%) + Alerts (right ~35%)
+   ===================================================== */
+body.has-sidebar #tabAgenda.manut-panel.active {
+    display: grid !important;
+    grid-template-columns: 1fr 380px;
+    gap: 24px;
+    align-items: start;
+}
+
+/* Alerts panel goes to right column */
+body.has-sidebar #tabAgenda #alertsSection {
+    order: 2;
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+/* Calendar goes to left column */
+body.has-sidebar #tabAgenda .agenda-section {
+    order: 1;
+}
+
+/* Alerts section styling to match mockup */
+body.has-sidebar #tabAgenda #alertsSection {
+    background: var(--bg-card, #2a3142);
+    border-radius: 16px;
+    padding: 20px;
+    border: 1px solid var(--border-color, #374151);
+}
+
+@media (max-width: 1100px) {
+    body.has-sidebar #tabAgenda.manut-panel.active {
+        grid-template-columns: 1fr !important;
+    }
+    body.has-sidebar #tabAgenda #alertsSection {
+        order: 1;
+    }
+    body.has-sidebar #tabAgenda .agenda-section {
+        order: 2;
+    }
+}
+
+/* =====================================================
+   FROTA - Hide extra table columns to match mockup
+   Mockup shows: PLACA, VEÍCULO, BLINDAGEM, REVISÃO, SEGURO, KM ATUAL, AÇÕES
+   Current: Veículo(1), Ano(2), Placa(3), Chassi(4), Renavam(5),
+            Próx.Revisão(6), RevisãoKM(7), KM Atual(8), Oficina(9),
+            Blindagem(10), Rev.Blind.(11), Seguradora(12), Obs(13), Ações(14)
+   Hide: Ano(2), Chassi(4), Renavam(5), RevisãoKM(7), Oficina(9), Rev.Blind.(11), Obs(13)
+   ===================================================== */
+body.has-sidebar .vehicles-table th:nth-child(2),
+body.has-sidebar .vehicles-table td:nth-child(2),
+body.has-sidebar .vehicles-table th:nth-child(4),
+body.has-sidebar .vehicles-table td:nth-child(4),
+body.has-sidebar .vehicles-table th:nth-child(5),
+body.has-sidebar .vehicles-table td:nth-child(5),
+body.has-sidebar .vehicles-table th:nth-child(7),
+body.has-sidebar .vehicles-table td:nth-child(7),
+body.has-sidebar .vehicles-table th:nth-child(9),
+body.has-sidebar .vehicles-table td:nth-child(9),
+body.has-sidebar .vehicles-table th:nth-child(11),
+body.has-sidebar .vehicles-table td:nth-child(11),
+body.has-sidebar .vehicles-table th:nth-child(13),
+body.has-sidebar .vehicles-table td:nth-child(13) {
+    display: none !important;
+}
+
+/* =====================================================
+   DASHBOARD - Hide extra table columns
+   Mockup shows: DATA, DESCRIÇÃO, CATEGORIA, VALOR (4 cols)
+   Current: Data(1), Descrição(2), Categoria(3), Fornecedor(4),
+            Valor(5), Pagamento(6), Vencimento(7), Anexo(8), Ações(9)
+   Hide: Fornecedor(4), Pagamento(6), Vencimento(7), Anexo(8), Ações(9)
+   ===================================================== */
+/* FIX 2026-05-08: revertido — escondia Fornecedor/Pagamento/Vencimento/Anexo/Ações
+   da tabela de despesas, impedindo o usuário de ver nota fiscal e usar botões de ação.
+body.has-sidebar .data-table#expensesTable th:nth-child(4),
+body.has-sidebar .data-table#expensesTable td:nth-child(4),
+body.has-sidebar .data-table#expensesTable th:nth-child(6),
+body.has-sidebar .data-table#expensesTable td:nth-child(6),
+body.has-sidebar .data-table#expensesTable th:nth-child(7),
+body.has-sidebar .data-table#expensesTable td:nth-child(7),
+body.has-sidebar .data-table#expensesTable th:nth-child(8),
+body.has-sidebar .data-table#expensesTable td:nth-child(8),
+body.has-sidebar .data-table#expensesTable th:nth-child(9),
+body.has-sidebar .data-table#expensesTable td:nth-child(9) {
+    display: none !important;
+}
+*/
+
+/* =====================================================
+   DASHBOARD - Hide filter bar above expenses table
+   ===================================================== */
+/* FIX 2026-05-08: revertido — escondia toda a barra de filtros do dashboard.
+body.has-sidebar .expenses-section .filters {
+    display: none !important;
+}
+*/
+
+/* =====================================================
+   DASHBOARD - KPI card icon styling (colored circles)
+   Match mockup: green circle for income, red for expense, purple for balance
+   ===================================================== */
+body.has-sidebar .summary-card .card-icon {
+    width: 44px !important;
+    height: 44px !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 18px !important;
+    flex-shrink: 0 !important;
+}
+
+body.has-sidebar .summary-card.income .card-icon {
+    background: var(--success, #10b981) !important;
+    color: #fff !important;
+}
+
+body.has-sidebar .summary-card.expense .card-icon {
+    background: var(--danger, #ef4444) !important;
+    color: #fff !important;
+}
+
+body.has-sidebar .summary-card.balance .card-icon {
+    background: var(--primary, #6366f1) !important;
+    color: #fff !important;
+}
+
+body.has-sidebar .summary-card .card-icon i {
+    color: #fff !important;
+}
+
+/* =====================================================
+   DASHBOARD - KPI cards colored top borders
+   ===================================================== */
+body.has-sidebar .summary-card.income {
+    border-top: 3px solid var(--success, #10b981) !important;
+}
+
+body.has-sidebar .summary-card.expense {
+    border-top: 3px solid var(--danger, #ef4444) !important;
+}
+
+body.has-sidebar .summary-card.balance {
+    border-top: 3px solid var(--primary, #6366f1) !important;
+}
+
+/* =====================================================
+   FROTA - Status cards: 4 in one row with colored top borders
+   ===================================================== */
+body.has-sidebar .status-cards {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 16px !important;
+}
+
+body.has-sidebar .status-card {
+    border-top: 3px solid transparent !important;
+}
+
+body.has-sidebar .status-card.total {
+    border-top-color: var(--info, #3b82f6) !important;
+}
+
+body.has-sidebar .status-card.blindado {
+    border-top-color: var(--success, #10b981) !important;
+}
+
+body.has-sidebar .status-card.revisao {
+    border-top-color: var(--danger, #ef4444) !important;
+}
+
+body.has-sidebar .status-card.seguro {
+    border-top-color: var(--warning, #f59e0b) !important;
+}
+
+/* Frota status card icon circles */
+body.has-sidebar .status-card .card-icon {
+    width: 40px !important;
+    height: 40px !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 16px !important;
+}
+
+body.has-sidebar .status-card.total .card-icon {
+    background: rgba(59, 130, 246, 0.2) !important;
+    color: #3b82f6 !important;
+}
+
+body.has-sidebar .status-card.blindado .card-icon {
+    background: rgba(16, 185, 129, 0.2) !important;
+    color: #10b981 !important;
+}
+
+body.has-sidebar .status-card.revisao .card-icon {
+    background: rgba(239, 68, 68, 0.2) !important;
+    color: #ef4444 !important;
+}
+
+body.has-sidebar .status-card.seguro .card-icon {
+    background: rgba(245, 158, 11, 0.2) !important;
+    color: #f59e0b !important;
+}
+
+/* Frota: Hide the revision alerts section (not in mockup main view) */
+body.has-sidebar .revision-alerts {
+    display: none !important;
+}
+
+/* Only hide alerts on Frota page (frota-container), NOT on Manutenções */
+body.has-sidebar .frota-container > .alerts-section,
+body.has-sidebar .frota-container > #alertsSection {
+    display: none !important;
+}
+
+/* Frota: Restyle filters to match mockup inline bar */
+body.has-sidebar .filters-section {
+    background: var(--bg-card, #2a3142) !important;
+    border-radius: 12px !important;
+    padding: 16px 20px !important;
+    border: 1px solid var(--border-color, #374151) !important;
+    margin: 16px 0 !important;
+}
+
+body.has-sidebar .filters-section .filters-row {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    flex-wrap: nowrap !important;
+}
+
+body.has-sidebar .filters-section .filter-group {
+    flex: 1 !important;
+    min-width: 0 !important;
+}
+
+body.has-sidebar .filters-section .filter-group label {
+    font-size: 12px !important;
+    color: var(--text-secondary, #9ca3af) !important;
+    margin-bottom: 4px !important;
+}
+
+/* Hide Seguradora and Status Revisão filters (mockup shows: Filtros | Status | Blindagem | Buscar) */
+body.has-sidebar .filters-section .filter-group:nth-child(n+4) {
+    display: none !important;
+}
+
+/* Show only first 3 filter groups (Buscar, Marca->Status, Blindagem) */
+body.has-sidebar .filters-section .filter-group:nth-child(1),
+body.has-sidebar .filters-section .filter-group:nth-child(2),
+body.has-sidebar .filters-section .filter-group:nth-child(3) {
+    display: flex !important;
+}
+
+/* =====================================================
+   MANUTENÇÕES - Status cards: 5 in one row with colored top borders
+   ===================================================== */
+body.has-sidebar .manut-dashboard {
+    display: grid !important;
+    grid-template-columns: repeat(5, 1fr) !important;
+    gap: 16px !important;
+}
+
+body.has-sidebar .manut-card {
+    border-top: 3px solid transparent !important;
+    background: var(--bg-card, #2a3142) !important;
+    border-radius: 12px !important;
+    padding: 16px !important;
+    border: 1px solid var(--border-color, #374151) !important;
+}
+
+/* Colored top borders matching mockup order */
+body.has-sidebar .manut-card:nth-child(1) {
+    border-top-color: var(--info, #3b82f6) !important;
+}
+
+body.has-sidebar .manut-card:nth-child(2) {
+    border-top-color: var(--warning, #f59e0b) !important;
+}
+
+body.has-sidebar .manut-card:nth-child(3) {
+    border-top-color: var(--danger, #ef4444) !important;
+}
+
+body.has-sidebar .manut-card:nth-child(4) {
+    border-top-color: var(--success, #10b981) !important;
+}
+
+body.has-sidebar .manut-card:nth-child(5) {
+    border-top-color: var(--primary, #6366f1) !important;
+}
+
+/* Manutenções card icon circles */
+body.has-sidebar .manut-card-icon {
+    width: 40px !important;
+    height: 40px !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 16px !important;
+}
+
+body.has-sidebar .manut-card-icon.total {
+    background: rgba(59, 130, 246, 0.2) !important;
+    color: #3b82f6 !important;
+}
+
+body.has-sidebar .manut-card-icon.pending {
+    background: rgba(245, 158, 11, 0.2) !important;
+    color: #f59e0b !important;
+}
+
+body.has-sidebar .manut-card-icon.overdue {
+    background: rgba(239, 68, 68, 0.2) !important;
+    color: #ef4444 !important;
+}
+
+body.has-sidebar .manut-card-icon.done {
+    background: rgba(16, 185, 129, 0.2) !important;
+    color: #10b981 !important;
+}
+
+body.has-sidebar .manut-card-icon.cost {
+    background: rgba(99, 102, 241, 0.2) !important;
+    color: #6366f1 !important;
+}
+
+/* MANUTENÇÕES - Header buttons: hide notification badge and Dashboard btn */
+body.has-sidebar .manut-header-right .btn-notification {
+    display: none !important;
+}
+
+body.has-sidebar .manut-header-right .btn-secondary {
+    display: none !important;
+}
+
+/* MANUTENÇÕES - Swap button order: Nova Manutenção first, Contratos second */
+body.has-sidebar .manut-header-right {
+    display: flex !important;
+    gap: 10px !important;
+}
+
+body.has-sidebar .manut-header-right .btn-primary {
+    order: 1 !important;
+}
+
+body.has-sidebar .manut-header-right .btn-success {
+    order: 2 !important;
+}
+
+/* =====================================================
+   RELATÓRIOS - Summary cards icon dots
+   ===================================================== */
+body.has-sidebar .reports-container .results-summary .summary-item,
+body.has-sidebar .reports-container .summary-cards .summary-card {
+    position: relative !important;
+    padding-left: 20px !important;
+}
+
+/* MANUTENÇÕES - Tabs styling for dark theme */
+body.has-sidebar .manut-tabs {
+    background: transparent !important;
+    border: none !important;
+    gap: 8px !important;
+    padding: 0 !important;
+    margin: 16px 0 !important;
+}
+
+body.has-sidebar .manut-tab {
+    background: transparent !important;
+    color: var(--text-secondary, #9ca3af) !important;
+    border: none !important;
+    border-bottom: 3px solid transparent !important;
+    padding: 10px 20px !important;
+    border-radius: 0 !important;
+}
+
+body.has-sidebar .manut-tab.active {
+    background: var(--primary, #6366f1) !important;
+    color: #fff !important;
+    border-radius: 8px !important;
+    border-bottom: none !important;
+}
+
+body.has-sidebar .manut-tab:hover:not(.active) {
+    color: var(--text-primary, #fff) !important;
+}
+
+@media (max-width: 1200px) {
+    body.has-sidebar .manut-dashboard {
+        grid-template-columns: repeat(3, 1fr) !important;
+    }
+}
+
+@media (max-width: 900px) {
+    body.has-sidebar .status-cards {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+    body.has-sidebar .manut-dashboard {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+}
+
+@media print {
+    .quick-actions,
+    .page-header-right .month-badge {
+        display: none !important;
+    }
+}
