@@ -1,0 +1,750 @@
+// Settings/Parameters Management
+
+function openSettingsModal() {
+    if (window.perm && !perm('parametros', 'visualizar')) { alert('Você não tem permissão para acessar Parâmetros.'); return; }
+    const modal = document.getElementById('settingsModal');
+    modal.style.display = 'block';
+    renderAllParameters();
+}
+
+function closeSettingsModal() {
+    document.getElementById('settingsModal').style.display = 'none';
+}
+
+// Tab Management
+function setupSettingsTabs() {
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const tabName = this.getAttribute('data-tab');
+
+            // Remove active from all tabs and contents
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+            // Add active to clicked tab and corresponding content
+            this.classList.add('active');
+            document.getElementById(tabName + '-tab').classList.add('active');
+        });
+    });
+}
+
+// Render Parameters
+function renderAllParameters() {
+    renderCategories();
+    renderSuppliers();
+    renderPaymentMethods();
+    renderYears();
+    renderUsers();
+}
+
+function renderCategories() {
+    const container = document.getElementById('categoriesList');
+    if (financialData.categories.length === 0) {
+        container.innerHTML = '<div class="empty-params">Nenhuma categoria cadastrada</div>';
+        return;
+    }
+
+    container.innerHTML = financialData.categories.map((category, index) => `
+        <div class="param-item" id="category-${index}">
+            <span class="param-name">${category}</span>
+            <div class="param-actions">
+                <button class="btn-icon edit" onclick="editParameter('category', ${index})" title="Editar">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn-icon delete" onclick="deleteParameter('category', ${index})" title="Excluir">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderSuppliers() {
+    const container = document.getElementById('suppliersList');
+    if (financialData.suppliers.length === 0) {
+        container.innerHTML = '<div class="empty-params">Nenhum fornecedor cadastrado</div>';
+        return;
+    }
+
+    container.innerHTML = financialData.suppliers.map((supplier, index) => `
+        <div class="param-item" id="supplier-${index}">
+            <span class="param-name">${supplier}</span>
+            <div class="param-actions">
+                <button class="btn-icon edit" onclick="editParameter('supplier', ${index})" title="Editar">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn-icon delete" onclick="deleteParameter('supplier', ${index})" title="Excluir">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderPaymentMethods() {
+    const container = document.getElementById('paymentsList');
+    if (financialData.paymentMethods.length === 0) {
+        container.innerHTML = '<div class="empty-params">Nenhuma forma de pagamento cadastrada</div>';
+        return;
+    }
+
+    container.innerHTML = financialData.paymentMethods.map((payment, index) => `
+        <div class="param-item" id="payment-${index}">
+            <span class="param-name">${payment}</span>
+            <div class="param-actions">
+                <button class="btn-icon edit" onclick="editParameter('payment', ${index})" title="Editar">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn-icon delete" onclick="deleteParameter('payment', ${index})" title="Excluir">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderYears() {
+    const container = document.getElementById('yearsList');
+    if (financialData.years.length === 0) {
+        container.innerHTML = '<div class="empty-params">Nenhum ano cadastrado</div>';
+        return;
+    }
+
+    container.innerHTML = financialData.years.sort((a, b) => a - b).map((year, index) => {
+        const yearIndex = financialData.years.indexOf(year);
+        return `
+        <div class="param-item" id="year-${yearIndex}">
+            <span class="param-name">${year}</span>
+            <div class="param-actions">
+                <button class="btn-icon edit" onclick="editParameter('year', ${yearIndex})" title="Editar">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn-icon delete" onclick="deleteParameter('year', ${yearIndex})" title="Excluir">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+    `}).join('');
+}
+
+
+// ===== HELPERS DA MATRIZ DE PERMISSÕES =====
+function setAllPerms(value) {
+    document.querySelectorAll('.perm-check:not([disabled])').forEach(el => el.checked = value);
+}
+
+function setPermPreset(preset) {
+    const mods = ['dashboard','frota','manutencoes','relatorios','parametros'];
+    const acts = ['visualizar','incluir','editar','excluir'];
+    mods.forEach(mod => {
+        acts.forEach(act => {
+            const el = document.getElementById(`perm_${mod}_${act}`);
+            if (!el || el.disabled) return;
+            if (preset === 'viewer') {
+                el.checked = (act === 'visualizar');
+            } else if (preset === 'operator') {
+                // Operador: pode incluir e editar, não excluir, não parâmetros
+                el.checked = (mod !== 'parametros') && (act !== 'excluir');
+            }
+        });
+    });
+}
+
+function renderUsers() {
+    const container = document.getElementById('usersList');
+    if (!financialData.users || financialData.users.length === 0) {
+        container.innerHTML = '<div class="empty-params">Nenhum usuário cadastrado</div>';
+        return;
+    }
+
+    const modLabels = { dashboard: 'Dashboard', frota: 'Frota', manutencoes: 'Manutenção', relatorios: 'Relatórios', parametros: 'Parâmetros' };
+    const actLabels = { visualizar: 'V', incluir: 'I', editar: 'E', excluir: 'X' };
+
+    container.innerHTML = financialData.users.map((user, index) => {
+        const perms = user.permissions || (window.getDefaultPermissions ? window.getDefaultPermissions(user.role) : {});
+        const isAdminUser = user.role === 'admin' && !user.permissions;
+
+        // Resumo das permissões
+        let permSummary = '';
+        if (isAdminUser) {
+            permSummary = '<span class="perm-badge perm-full">Acesso Total</span>';
+        } else {
+            permSummary = Object.entries(modLabels).map(([mod, label]) => {
+                const p = perms[mod] || {};
+                const acts = Object.entries(actLabels).filter(([a]) => p[a]).map(([,l]) => l).join('');
+                if (!acts) return `<span class="perm-badge perm-none" title="${label}: Sem acesso">${label.substring(0,3)}: -</span>`;
+                return `<span class="perm-badge perm-partial" title="${label}: ${acts}">${label.substring(0,3)}: ${acts}</span>`;
+            }).join('');
+        }
+
+        return `
+        <div class="param-item user-item" id="user-${index}">
+            <div class="user-details">
+                <span class="param-name">
+                    <i class="fas fa-user-circle" style="margin-right: 8px; color: var(--primary);"></i>
+                    ${user.name}
+                    <small style="color:#888;font-weight:400;margin-left:6px;">@${user.username}</small>
+                </span>
+                <div class="user-perms-summary">${permSummary}</div>
+            </div>
+            <div class="param-actions">
+                <button class="btn-icon edit" onclick="editUser(${index})" title="Editar permissões">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn-icon delete" onclick="deleteUser(${index})" title="Excluir" ${user.username === 'admin' ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+// Add New Parameter
+function addNewParameter(paramType) {
+    if (!checkAdminPermission()) return;
+    const value = prompt('Digite o nome ' + (paramType === 'category' ? 'da categoria' : paramType === 'supplier' ? 'do fornecedor' : paramType === 'payment' ? 'da forma de pagamento' : 'do ano') + ':');
+
+    if (!value || value.trim() === '') return;
+
+    const trimmedValue = paramType === 'year' ? parseInt(value.trim()) : value.trim();
+
+    switch(paramType) {
+        case 'category':
+            if (financialData.categories.includes(trimmedValue)) {
+                alert('Esta categoria já existe!');
+                return;
+            }
+            financialData.categories.push(trimmedValue);
+            renderCategories();
+            break;
+        case 'supplier':
+            if (financialData.suppliers.includes(trimmedValue)) {
+                alert('Este fornecedor já existe!');
+                return;
+            }
+            financialData.suppliers.push(trimmedValue);
+            renderSuppliers();
+            break;
+        case 'payment':
+            if (financialData.paymentMethods.includes(trimmedValue)) {
+                alert('Esta forma de pagamento já existe!');
+                return;
+            }
+            financialData.paymentMethods.push(trimmedValue);
+            renderPaymentMethods();
+            break;
+        case 'year':
+            if (isNaN(trimmedValue)) {
+                alert('Por favor, digite um ano válido!');
+                return;
+            }
+            if (financialData.years.includes(trimmedValue)) {
+                alert('Este ano já existe!');
+                return;
+            }
+            financialData.years.push(trimmedValue);
+            renderYears();
+            break;
+    }
+
+    saveToLocalStorage();
+    populateSelects();
+    showToast('Item adicionado com sucesso!', 'success');
+}
+
+// Edit Parameter
+function editParameter(paramType, index) {
+    if (!checkAdminPermission()) return;
+    let currentValue;
+    let arrayName;
+
+    switch(paramType) {
+        case 'category':
+            arrayName = 'categories';
+            currentValue = financialData.categories[index];
+            break;
+        case 'supplier':
+            arrayName = 'suppliers';
+            currentValue = financialData.suppliers[index];
+            break;
+        case 'payment':
+            arrayName = 'paymentMethods';
+            currentValue = financialData.paymentMethods[index];
+            break;
+        case 'year':
+            arrayName = 'years';
+            currentValue = financialData.years[index];
+            break;
+    }
+
+    const newValue = prompt('Editar ' + (paramType === 'category' ? 'categoria' : paramType === 'supplier' ? 'fornecedor' : paramType === 'payment' ? 'forma de pagamento' : 'ano') + ':', currentValue);
+
+    if (!newValue || newValue.trim() === '' || newValue === currentValue.toString()) return;
+
+    const trimmedValue = paramType === 'year' ? parseInt(newValue.trim()) : newValue.trim();
+
+    if (paramType === 'year' && isNaN(trimmedValue)) {
+        alert('Por favor, digite um ano válido!');
+        return;
+    }
+
+    financialData[arrayName][index] = trimmedValue;
+
+    saveToLocalStorage();
+    renderAllParameters();
+    populateSelects();
+    showToast('Item editado com sucesso!', 'success');
+}
+
+// Delete Parameter
+function deleteParameter(paramType, index) {
+    if (!checkAdminPermission()) return;
+    let arrayName;
+    let itemName;
+
+    switch(paramType) {
+        case 'category':
+            arrayName = 'categories';
+            itemName = financialData.categories[index];
+            break;
+        case 'supplier':
+            arrayName = 'suppliers';
+            itemName = financialData.suppliers[index];
+            break;
+        case 'payment':
+            arrayName = 'paymentMethods';
+            itemName = financialData.paymentMethods[index];
+            break;
+        case 'year':
+            arrayName = 'years';
+            itemName = financialData.years[index];
+            break;
+    }
+
+    if (!confirm('Tem certeza que deseja excluir "' + itemName + '"?')) return;
+
+    financialData[arrayName].splice(index, 1);
+
+    saveToLocalStorage();
+    renderAllParameters();
+    populateSelects();
+    showToast('Item excluído com sucesso!', 'success');
+}
+
+// User Management Functions
+function openAddUserModal() {
+    if (!checkAdminPermission()) return;
+    const modal = document.getElementById('userModal');
+    const form = document.getElementById('userForm');
+    const title = document.getElementById('userModalTitle');
+
+    form.reset();
+    delete form.dataset.editIndex;
+    title.innerHTML = '<i class="fas fa-user-plus"></i> Novo Usuário';
+    // Esconder matriz até usuário selecionar tipo
+    togglePermMatrix('');
+    modal.style.display = 'block';
+}
+
+function editUser(index) {
+    if (!checkAdminPermission()) return;
+    const user = financialData.users[index];
+    const modal = document.getElementById('userModal');
+    const form = document.getElementById('userForm');
+    const title = document.getElementById('userModalTitle');
+
+    title.innerHTML = '<i class="fas fa-user-edit"></i> Editar Usuário';
+    document.getElementById('userName').value = user.name;
+    document.getElementById('userUsername').value = user.username;
+    document.getElementById('userPassword').value = user.password;
+    document.getElementById('userRole').value = user.role;
+    form.dataset.editIndex = index;
+
+    // Carregar permissões na matriz de checkboxes
+    const perms = user.permissions || (window.getDefaultPermissions ? window.getDefaultPermissions(user.role) : {});
+    ['dashboard','frota','manutencoes','relatorios','parametros'].forEach(mod => {
+        ['visualizar','incluir','editar','excluir'].forEach(act => {
+            const el = document.getElementById(`perm_${mod}_${act}`);
+            if (el) el.checked = !!(perms[mod] && perms[mod][act]);
+        });
+    });
+
+    // Mostrar/ocultar matriz conforme o tipo de usuário
+    togglePermMatrix(user.role);
+    modal.style.display = 'block';
+}
+
+function togglePermMatrix(role) {
+    const matrix = document.getElementById('permMatrix');
+    if (!matrix) return;
+    if (role === 'admin' || role === '' || !role) {
+        matrix.style.display = 'none';
+    } else {
+        // Mostrar e rolar para a matriz
+        matrix.style.display = 'block';
+        // Scroll suave para a matriz aparecer
+        setTimeout(() => {
+            matrix.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 50);
+    }
+}
+// Expor globalmente para uso no onchange inline do HTML
+window.togglePermMatrix = togglePermMatrix;
+window.setAllPerms = setAllPerms;
+window.setPermPreset = setPermPreset;
+
+function deleteUser(index) {
+    if (!checkAdminPermission()) return;
+    const user = financialData.users[index];
+
+    // Prevent deletion of default admin user
+    if (user.username === 'admin') {
+        alert('O usuário administrador padrão não pode ser excluído!');
+        return;
+    }
+
+    if (!confirm(`Tem certeza que deseja excluir o usuário "${user.name}"?`)) return;
+
+    financialData.users.splice(index, 1);
+    saveToLocalStorage();
+    renderUsers();
+    showToast('Usuário excluído com sucesso!', 'success');
+}
+
+function handleUserSubmit(e) {
+    e.preventDefault();
+
+    const form = e.target;
+    const isEditing = form.dataset.editIndex !== undefined;
+
+    const role = document.getElementById('userRole').value;
+
+    // Coletar permissões da matriz
+    let permissions = null;
+    if (role !== 'admin') {
+        permissions = {};
+        ['dashboard','frota','manutencoes','relatorios','parametros'].forEach(mod => {
+            permissions[mod] = {};
+            ['visualizar','incluir','editar','excluir'].forEach(act => {
+                const el = document.getElementById(`perm_${mod}_${act}`);
+                permissions[mod][act] = el ? el.checked : false;
+            });
+        });
+    }
+
+    const user = {
+        name: document.getElementById('userName').value.trim(),
+        username: document.getElementById('userUsername').value.trim().toLowerCase(),
+        password: document.getElementById('userPassword').value,
+        role: role,
+        permissions: permissions
+    };
+
+    // Validate username uniqueness (except when editing the same user)
+    const existingUserIndex = financialData.users.findIndex(u => u.username === user.username);
+    if (existingUserIndex !== -1 && (!isEditing || parseInt(form.dataset.editIndex) !== existingUserIndex)) {
+        alert('Este nome de usuário já está em uso!');
+        return;
+    }
+
+    if (isEditing) {
+        const index = parseInt(form.dataset.editIndex);
+        const oldUser = financialData.users[index];
+
+        // Prevent changing admin username
+        if (oldUser.username === 'admin' && user.username !== 'admin') {
+            alert('O nome de usuário do administrador padrão não pode ser alterado!');
+            return;
+        }
+
+        financialData.users[index] = user;
+        showToast('Usuário atualizado com sucesso!', 'success');
+
+        // Update current user session if editing logged in user
+        if (financialData.currentUser && financialData.currentUser.username === oldUser.username) {
+            const userSession = {
+                username: user.username,
+                name: user.name,
+                role: user.role
+            };
+            localStorage.setItem('currentUser', JSON.stringify(userSession));
+            financialData.currentUser = userSession;
+            updateUIForUserRole();
+
+            // Update header user info
+            const userInfo = document.getElementById('userInfo');
+            if (userInfo) {
+                userInfo.innerHTML = `
+                    <span class="user-name">
+                        <i class="fas fa-user-circle"></i> ${user.name}
+                        <span class="user-role">(${user.role === 'admin' ? 'Admin' : 'Visualização'})</span>
+                    </span>
+                    <button class="btn btn-secondary btn-sm" onclick="logout()">
+                        <i class="fas fa-sign-out-alt"></i> Sair
+                    </button>
+                `;
+            }
+        }
+    } else {
+        financialData.users.push(user);
+        showToast('Usuário criado com sucesso!', 'success');
+    }
+
+    saveToLocalStorage();
+    renderUsers();
+    document.getElementById('userModal').style.display = 'none';
+    form.reset();
+}
+
+// Initialize Settings
+document.addEventListener('DOMContentLoaded', function() {
+    // Injetar estilos dos badges de permissão
+    if (!document.getElementById('permStyles')) {
+        const s = document.createElement('style');
+        s.id = 'permStyles';
+        s.textContent = `
+            .user-perms-summary { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
+            .perm-badge { padding:2px 7px; border-radius:10px; font-size:11px; font-weight:500; white-space:nowrap; }
+            .perm-full { background:#d4edda; color:#155724; }
+            .perm-partial { background:#fff3cd; color:#856404; }
+            .perm-none { background:#f8d7da; color:#721c24; }
+            .perm-check { width:16px; height:16px; cursor:pointer; accent-color:var(--primary); }
+            #permMatrix table tr.perm-row:hover { background:#f8f9fa; }
+        `;
+        document.head.appendChild(s);
+    }
+
+    const settingsBtn = document.getElementById('settingsBtn');
+    if (settingsBtn) {
+        settingsBtn.addEventListener('click', openSettingsModal);
+    }
+
+    setupSettingsTabs();
+
+    // User Modal
+    const userForm = document.getElementById('userForm');
+    if (userForm) {
+        userForm.addEventListener('submit', handleUserSubmit);
+    }
+
+    const cancelUserBtn = document.getElementById('cancelUser');
+    if (cancelUserBtn) {
+        cancelUserBtn.addEventListener('click', function() {
+            document.getElementById('userModal').style.display = 'none';
+        });
+    }
+
+    // Close user modal when clicking X
+    const userModal = document.getElementById('userModal');
+    if (userModal) {
+        const closeBtn = userModal.querySelector('.close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', function() {
+                userModal.style.display = 'none';
+            });
+        }
+
+        window.addEventListener('click', function(e) {
+            if (e.target === userModal) {
+                userModal.style.display = 'none';
+            }
+        });
+    }
+
+
+// ===================================================
+// SISTEMA DE AUDITORIA — Funções de UI
+// ===================================================
+let _auditLogs = [];
+let _auditPage = 0;
+const _auditPageSize = 50;
+
+// Normaliza módulo (suporta formato antigo AUTENTICACAO e novo auth)
+function _auditModuloNorm(m) {
+    if (!m) return 'outros';
+    const l = m.toLowerCase();
+    if (l === 'autenticacao' || l === 'auth') return 'auth';
+    if (l === 'dashboard') return 'dashboard';
+    if (l === 'frota') return 'frota';
+    if (l === 'manutencoes') return 'manutencoes';
+    if (l === 'parametros') return 'parametros';
+    return l;
+}
+
+// Normaliza ação (suporta INSERT/INCLUIR/incluir etc.)
+function _auditAcaoNorm(a) {
+    if (!a) return 'visualizar';
+    const l = a.toLowerCase();
+    if (l === 'login') return 'login';
+    if (l === 'logout') return 'logout';
+    if (l === 'incluir' || l === 'insert' || l === 'create' || l === 'add') return 'incluir';
+    if (l === 'editar'  || l === 'update' || l === 'edit')   return 'editar';
+    if (l === 'excluir' || l === 'delete' || l === 'remove') return 'excluir';
+    return l;
+}
+
+async function carregarAuditoria() {
+    const tbody = document.getElementById('auditTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:30px;color:#888;"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>';
+    try {
+        const r = await fetch(`${window.location.origin}/api/audit?limit=500`);
+        if (!r.ok) throw new Error('Falha ao buscar logs (status ' + r.status + ')');
+        const data = await r.json();
+        _auditLogs = data.logs || [];
+        _auditPage = 0;
+
+        // Preencher filtro de usuários
+        const usuarios = [...new Set(_auditLogs.map(l => l.usuario || l.username || l.userId || '').filter(Boolean))].sort();
+        const selUsr = document.getElementById('auditFiltroUsuario');
+        if (selUsr) {
+            selUsr.innerHTML = '<option value="">Todos os usuários</option>' +
+                usuarios.map(u => `<option value="${u}">${u}</option>`).join('');
+        }
+        renderAuditoria();
+    } catch (e) {
+        if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:30px;color:#e74c3c;"><i class="fas fa-exclamation-triangle"></i> Erro ao carregar: ${e.message}</td></tr>`;
+    }
+}
+
+function getLogsAuditFiltrados() {
+    const modulo  = document.getElementById('auditFiltroModulo')?.value  || '';
+    const acao    = document.getElementById('auditFiltroAcao')?.value    || '';
+    const usuario = document.getElementById('auditFiltroUsuario')?.value || '';
+    return _auditLogs.filter(l => {
+        const lMod  = _auditModuloNorm(l.modulo || l.module  || '');
+        const lAcao = _auditAcaoNorm  (l.acao   || l.action  || '');
+        const lUser = l.usuario || l.username || l.userId || '';
+        return (!modulo  || lMod  === modulo)  &&
+               (!acao    || lAcao === acao)    &&
+               (!usuario || lUser === usuario);
+    });
+}
+
+function renderAuditoria() {
+    const filtrados = getLogsAuditFiltrados();
+    const total     = filtrados.length;
+    const inicio    = _auditPage * _auditPageSize;
+    const pagina    = filtrados.slice(inicio, inicio + _auditPageSize);
+
+    // Cards de resumo
+    const resumoEl = document.getElementById('auditResumo');
+    if (resumoEl) {
+        const contagens = _auditLogs.reduce((acc, l) => {
+            const k = _auditAcaoNorm(l.acao || l.action);
+            acc[k] = (acc[k] || 0) + 1; return acc;
+        }, {});
+        const cards = [
+            { icon:'📋', label:'Total de eventos', val:_auditLogs.length,         bg:'#eaf4fb', cor:'#1a5276' },
+            { icon:'🔐', label:'Logins',           val:(contagens.login   || 0),  bg:'#eafaf1', cor:'#1e8449' },
+            { icon:'➕', label:'Inclusões',        val:(contagens.incluir || 0),  bg:'#fef9e7', cor:'#b7950b' },
+            { icon:'✏️', label:'Edições',          val:(contagens.editar  || 0),  bg:'#f4ecf7', cor:'#7d3c98' },
+            { icon:'🗑️', label:'Exclusões',        val:(contagens.excluir || 0),  bg:'#fdedec', cor:'#c0392b' },
+        ];
+        resumoEl.innerHTML = cards.map(c =>
+            `<div style="background:${c.bg};border-radius:10px;padding:12px 18px;text-align:center;min-width:100px;flex:1;">
+                <div style="font-size:20px;">${c.icon}</div>
+                <div style="font-size:22px;font-weight:bold;color:${c.cor};">${c.val}</div>
+                <div style="font-size:11px;color:#666;margin-top:2px;">${c.label}</div>
+            </div>`
+        ).join('');
+    }
+
+    const moduloLabels = { auth:'🔐 Login', dashboard:'📊 Dashboard', frota:'🚗 Frota', manutencoes:'🔧 Manutenção', parametros:'⚙️ Parâmetros', outros:'📋 Outros' };
+    const acaoBadge    = { login:'badge-login', logout:'badge-logout', incluir:'badge-incluir', editar:'badge-editar', excluir:'badge-excluir', visualizar:'badge-visualizar' };
+    const acaoLabel    = { login:'Login', logout:'Logout', incluir:'Incluiu', editar:'Editou', excluir:'Excluiu', visualizar:'Visualizou' };
+
+    const tbody = document.getElementById('auditTableBody');
+    if (!tbody) return;
+
+    if (pagina.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:30px;color:#888;">Nenhum registro encontrado com os filtros selecionados.</td></tr>';
+    } else {
+        tbody.innerHTML = pagina.map(log => {
+            const dt       = new Date(log.timestamp || log.time || Date.now());
+            const dataStr  = dt.toLocaleDateString('pt-BR') + ' ' + dt.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+            const modNorm  = _auditModuloNorm(log.modulo  || log.module  || '');
+            const actNorm  = _auditAcaoNorm  (log.acao    || log.action  || '');
+            const usuario  = log.usuario  || log.username || log.userId  || 'desconhecido';
+            const nome     = log.nome     || log.userName || usuario;
+            const descricao = log.descricao || log.description ||
+                              (log.changes ? `Alteração em ${log.resourceType||'registro'}` : '-');
+            const badge    = acaoBadge[actNorm]   || 'badge-visualizar';
+            const acaoTxt  = acaoLabel[actNorm]   || actNorm;
+            const modTxt   = moduloLabels[modNorm] || modNorm;
+            return `<tr>
+                <td style="font-size:12px;white-space:nowrap;">${dataStr}</td>
+                <td><strong>${nome}</strong><br><small style="color:#888;">@${usuario}</small></td>
+                <td>${modTxt}</td>
+                <td><span class="audit-badge ${badge}">${acaoTxt}</span></td>
+                <td style="font-size:13px;">${descricao}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    // Paginação
+    const paginacaoEl = document.getElementById('auditPaginacao');
+    if (paginacaoEl) {
+        const totalPags = Math.ceil(total / _auditPageSize);
+        if (totalPags <= 1) {
+            paginacaoEl.innerHTML = `<span style="font-size:13px;color:#888;">${total} registro(s)</span>`;
+        } else {
+            paginacaoEl.innerHTML =
+                `<button class="btn btn-outline btn-sm" onclick="_auditPage=Math.max(0,_auditPage-1);renderAuditoria()" ${_auditPage===0?'disabled':''}>
+                    <i class="fas fa-chevron-left"></i></button>
+                <span style="font-size:13px;padding:0 10px;">Pág. ${_auditPage+1} de ${totalPags} (${total} registros)</span>
+                <button class="btn btn-outline btn-sm" onclick="_auditPage=Math.min(${totalPags-1},_auditPage+1);renderAuditoria()" ${_auditPage>=totalPags-1?'disabled':''}>
+                    <i class="fas fa-chevron-right"></i></button>`;
+        }
+    }
+}
+
+function filtrarAuditoria()        { _auditPage = 0; renderAuditoria(); }
+function limparFiltrosAuditoria()  {
+    ['auditFiltroModulo','auditFiltroAcao','auditFiltroUsuario'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+    _auditPage = 0; renderAuditoria();
+}
+
+function exportarAuditoria() {
+    const logs = getLogsAuditFiltrados();
+    const moduloLabels = { auth:'Login', dashboard:'Dashboard', frota:'Frota', manutencoes:'Manutencao', parametros:'Parametros' };
+    const header = 'Data/Hora,Usuario,Nome,Modulo,Acao,Descricao';
+    const rows = logs.map(l => {
+        const dt   = new Date(l.timestamp || l.time || Date.now()).toLocaleString('pt-BR');
+        const usr  = l.usuario || l.username || '?';
+        const nome = (l.nome   || l.userName || usr).replace(/,/g,';');
+        const mod  = moduloLabels[_auditModuloNorm(l.modulo||l.module||'')] || (l.modulo||'?');
+        const acao = _auditAcaoNorm(l.acao||l.action||'?');
+        const desc = (l.descricao || l.description || '').replace(/,/g,';').replace(/\n/g,' ');
+        return `"${dt}","${usr}","${nome}","${mod}","${acao}","${desc}"`;
+    });
+    const csv  = [header,...rows].join('\n');
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = `auditoria_casadw_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+}
+
+window.carregarAuditoria     = carregarAuditoria;
+window.filtrarAuditoria      = filtrarAuditoria;
+window.limparFiltrosAuditoria = limparFiltrosAuditoria;
+window.renderAuditoria       = renderAuditoria;
+window.exportarAuditoria     = exportarAuditoria;
+
+    // Close settings modal when clicking X or outside
+    const settingsModal = document.getElementById('settingsModal');
+    if (settingsModal) {
+        const closeBtn = settingsModal.querySelector('.close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', closeSettingsModal);
+        }
+
+        window.addEventListener('click', function(e) {
+            if (e.target === settingsModal) {
+                closeSettingsModal();
+            }
+        });
+    }
+});

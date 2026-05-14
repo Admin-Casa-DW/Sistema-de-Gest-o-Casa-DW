@@ -1,0 +1,63 @@
+// jwt-interceptor.js — Interceptador global de fetch para JWT
+// Adiciona automaticamente o token JWT em todas as requisicoes para a API
+// Deve ser carregado ANTES de qualquer outro script que faca fetch
+
+(function() {
+    var originalFetch = window.fetch;
+
+    window.fetch = function(url, options) {
+        options = options || {};
+
+        // Verificar se eh uma requisicao para a nossa API
+        var apiUrl = (window.APP_CONFIG && window.APP_CONFIG.API_URL) || '';
+        var isApiRequest = apiUrl && typeof url === 'string' && url.indexOf(apiUrl) === 0;
+
+        if (isApiRequest) {
+            // Adicionar token JWT
+            var token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
+
+            if (token) {
+                if (!options.headers) {
+                    options.headers = {};
+                }
+
+                // Se headers eh um Headers object, usar append
+                if (options.headers instanceof Headers) {
+                    if (!options.headers.has('Authorization')) {
+                        options.headers.append('Authorization', 'Bearer ' + token);
+                    }
+                } else {
+                    // Headers eh um objeto simples
+                    if (!options.headers['Authorization']) {
+                        options.headers['Authorization'] = 'Bearer ' + token;
+                    }
+                }
+            }
+        }
+
+        // Chamar fetch original
+        return originalFetch.call(window, url, options).then(function(response) {
+            // Se receber 401, redirecionar para login
+            if (response.status === 401 && isApiRequest) {
+                console.warn('JWT expirado. Redirecionando para login...');
+                sessionStorage.removeItem('authToken');
+                localStorage.removeItem('authToken');
+                sessionStorage.removeItem('currentUser');
+                localStorage.removeItem('currentUser');
+
+                // Redirecionar para pagina principal (login)
+                if (window.location.pathname !== '/' && window.location.pathname !== '/index.html') {
+                    window.location.href = '/';
+                } else {
+                    var loginPage = document.getElementById('loginPage');
+                    var mainApp = document.getElementById('mainApp');
+                    if (loginPage) loginPage.style.display = 'flex';
+                    if (mainApp) mainApp.style.display = 'none';
+                }
+            }
+            return response;
+        });
+    };
+
+    console.log('JWT Interceptor ativo');
+})();

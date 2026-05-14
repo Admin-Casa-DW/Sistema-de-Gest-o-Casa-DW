@@ -1,0 +1,115 @@
+// audit.js — Sistema de Auditoria Casa DW v2.0
+// Registra todas as ações dos usuários no MongoDB via API
+
+const _AUDIT_API_URL = (function() {
+    try {
+        return window.location.hostname === 'localhost'
+            ? 'http://localhost:3000'
+            : 'https://casadw.com.br';
+    } catch(e) { return 'https://casadw.com.br'; }
+})();
+
+/**
+ * Retorna o usuário atual — tenta financialData primeiro, depois sessionStorage
+ */
+function _getAuditUser() {
+    // Tentativa 1: financialData.currentUser (pode ser null se loadAll() resetou)
+    if (typeof financialData !== 'undefined' && financialData.currentUser && financialData.currentUser.username) {
+        return financialData.currentUser;
+    }
+    // Tentativa 2: sessionStorage / localStorage (sempre disponível após login)
+    try {
+        const stored = sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser');
+        if (stored) {
+            const u = JSON.parse(stored);
+            if (u && u.username) return u;
+        }
+    } catch(e) {}
+    return null;
+}
+
+/**
+ * Registra uma ação de auditoria no servidor (fire-and-forget)
+ * @param {string} modulo   - 'dashboard' | 'frota' | 'manutencoes' | 'parametros' | 'auth'
+ * @param {string} acao     - 'login' | 'logout' | 'incluir' | 'editar' | 'excluir'
+ * @param {string} descricao - Descrição humana da ação
+ * @param {object} [detalhes] - Dados adicionais opcionais
+ */
+async function registrarAuditoria(modulo, acao, descricao, detalhes) {
+    try {
+        const user = _getAuditUser();
+        if (!user) {
+            console.warn('[Auditoria] Usuário não identificado — log ignorado:', modulo, acao);
+            return;
+        }
+
+        const payload = {
+            timestamp:  new Date().toISOString(),
+            usuario:    user.username || 'desconhecido',
+            nome:       user.name    || user.username || 'desconhecido',
+            modulo:     modulo,
+            acao:       acao,
+            descricao:  descricao || '',
+            detalhes:   detalhes  || {}
+        };
+
+        console.log('[Auditoria]', modulo, acao, '-', user.username, '-', descricao);
+
+        fetch(_AUDIT_API_URL + '/api/audit', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify(payload)
+        }).then(function(r) {
+            if (!r.ok) r.text().then(function(t) { console.warn('[Auditoria] Erro HTTP:', r.status, t); });
+        }).catch(function(e) {
+            console.warn('[Auditoria] Falha na requisição:', e.message);
+        });
+
+    } catch (e) {
+        console.warn('[Auditoria] Erro inesperado:', e.message);
+    }
+}
+
+// Exportar explicitamente para uso via if (window.registrarAuditoria)
+window.registrarAuditoria = registrarAuditoria;
+
+// ===== FUNÇÃO DE BUSCA (usada pela aba antiga de auditoria) =====
+async function _buscarLogsAuditoria(filtros) {
+    filtros = filtros || {};
+    var params = new URLSearchParams();
+    if (filtros.usuario)    params.append('usuario', filtros.usuario);
+    if (filtros.modulo)     params.append('modulo',  filtros.modulo);
+    if (filtros.acao)       params.append('acao',    filtros.acao);
+    if (filtros.from)       params.append('from',    filtros.from);
+    if (filtros.to)         params.append('to',      filtros.to);
+    if (filtros.dataInicio) params.append('from',    filtros.dataInicio);
+    if (filtros.dataFim)    params.append('to',      filtros.dataFim);
+    params.append('limit', filtros.limit || 500);
+    var r = await fetch(_AUDIT_API_URL + '/api/audit?' + params.toString());
+    if (!r.ok) throw new Error('Erro HTTP ' + r.status);
+    return await r.json();  // { logs: [...], total: N }
+}
+
+async function _limparLogsAuditoria(dias) {
+    var r = await fetch(_AUDIT_API_URL + '/api/audit?dias=' + (dias || 90), { method: 'DELETE' });
+    if (!r.ok) throw new Error('Erro HTTP ' + r.status);
+    return await r.json();
+}
+
+// Compatibilidade com sistema legado (window.auditoria.despesa etc.)
+window.auditoria = {
+    registrar:   registrarAuditoria,
+    buscar:      _buscarLogsAuditoria,
+    limpar:      _limparLogsAuditoria,
+    login:       function(u, ok) { registrarAuditoria('auth', ok !== false ? 'login' : 'login_falha', 'Login de ' + u, { usuario: u }); },
+    logout:      function()      { var u = _getAuditUser(); if (u) registrarAuditoria('auth', 'logout', 'Logout de ' + u.username, { usuario: u.username }); },
+    despesa:     function(a, d)  { registrarAuditoria('dashboard', a.toLowerCase(), 'Despesa: ' + (d && d.description ? d.description : a), d); },
+    receita:     function(a, r)  { registrarAuditoria('dashboard', a.toLowerCase(), 'Receita: ' + (r && r.description ? r.description : a), r); },
+    nota:        function()      { registrarAuditoria('dashboard', 'editar', 'Notas atualizadas'); },
+    veiculo:     function(a, v)  { registrarAuditoria('frota', a.toLowerCase(), 'Veículo: ' + (v && v.placa ? v.placa : a), v); },
+    manutencao:  function(a, m)  { registrarAuditoria('manutencoes', a.toLowerCase(), 'Manutenção: ' + (m ? JSON.stringify(m).slice(0,60) : a), m); },
+    contrato:    function(a, c)  { registrarAuditoria('manutencoes', a.toLowerCase(), 'Contrato: ' + (c && c.company ? c.company : a), c); },
+    usuario:     function(a, u)  { registrarAuditoria('parametros', a.toLowerCase(), 'Usuário: ' + (u && u.username ? u.username : a), u); }
+};
+
+console.log('[Auditoria] Sistema carregado — usuário atual:', (_getAuditUser() || {}).username || 'ainda não logado');

@@ -1,0 +1,590 @@
+// Sistema de Armazenamento APENAS NA NUVEM
+// v2.0 — Com autenticacao JWT
+// Sem localStorage - tudo salvo direto no backend
+
+// URL da API
+const API_URL = window.APP_CONFIG?.API_URL || null;
+const CLOUD_ENABLED = API_URL !== null && API_URL !== '';
+
+// Fetch com timeout e autenticacao JWT
+async function cloudFetchWithTimeout(url, options = {}, timeoutMs = null) {
+    // Auto-detectar timeout baseado no metodo
+    if (timeoutMs === null) {
+        timeoutMs = (options.method === 'POST') ? 30000 : 8000;
+    }
+
+    // SEGURANCA: Adicionar token JWT automaticamente
+    if (!options.headers) options.headers = {};
+    if (!options.headers['Content-Type'] && options.method !== 'GET') {
+        options.headers['Content-Type'] = 'application/json';
+    }
+
+    // Obter token JWT do auth.js
+    var token = window.getAuthToken ? window.getAuthToken() : (
+        sessionStorage.getItem('authToken') || localStorage.getItem('authToken')
+    );
+    if (token) {
+        options.headers['Authorization'] = 'Bearer ' + token;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const response = await fetch(url, { ...options, signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        // Se receber 401, redirecionar para login
+        if (response.status === 401) {
+            console.warn('Token expirado ou invalido. Redirecionando para login...');
+            if (window.clearAuthToken) window.clearAuthToken();
+            sessionStorage.removeItem('authToken');
+            localStorage.removeItem('authToken');
+            sessionStorage.removeItem('currentUser');
+            localStorage.removeItem('currentUser');
+            if (typeof financialData !== 'undefined') financialData.currentUser = null;
+            // Mostrar pagina de login
+            var loginPage = document.getElementById('loginPage');
+            var mainApp = document.getElementById('mainApp');
+            if (loginPage) loginPage.style.display = 'flex';
+            if (mainApp) mainApp.style.display = 'none';
+            throw new Error('Sessao expirada. Faca login novamente.');
+        }
+
+        return response;
+    } catch (err) {
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError') {
+            throw new Error('Timeout: servidor demorou mais de ' + (timeoutMs / 1000) + 's');
+        }
+        throw err;
+    }
+}
+
+// ID do usuario de dados — SEMPRE 'admin' (dados centrais da casa).
+const DATA_USER_ID = 'admin';
+let USER_ID = DATA_USER_ID;
+
+// Garantir que o localStorage sempre reflete o userId de dados correto
+localStorage.setItem('user-id', DATA_USER_ID);
+
+console.log('Sistema de armazenamento NA NUVEM ativado (JWT)');
+console.log('API:', API_URL);
+console.log('USER_ID (dados):', USER_ID);
+
+// Objeto de armazenamento que usa APENAS a nuvem
+const CloudStorage = {
+    _dataLoaded: false,
+    _saveTimeout: null,
+    _pendingSave: null,
+    _saving: false,       // Flag para evitar race conditions
+    _saveQueue: null,     // Dados enfileirados enquanto salva
+
+    // Carregar TODOS os dados da nuvem
+    async loadAll() {
+        const currentUserId = window.getUserId ? window.getUserId() : USER_ID;
+
+        if (!currentUserId || !CLOUD_ENABLED) {
+            console.error('Cloud storage nao configurado ou USER_ID nao definido');
+            return null;
+        }
+
+        try {
+            console.log('Carregando dados da nuvem...');
+            const response = await cloudFetchWithTimeout(`${API_URL}/api/sync/${currentUserId}`);
+
+            if (!response.ok) {
+                console.log('Nenhum dado na nuvem ainda (primeira vez)');
+                this._dataLoaded = true;
+                return this.createEmptyData();
+            }
+
+            const data = await response.json();
+            console.log('Dados carregados da nuvem');
+
+            this._dataLoaded = true;
+            const converted = this.convertFromAPI(data);
+            // Salvar cache local para fallback offline
+            this._saveLocalCache(converted);
+            return converted;
+
+        } catch (error) {
+            console.error('Erro ao carregar da nuvem:', error);
+            this._dataLoaded = true;
+            this._loadError = true;
+
+            // Tentar carregar do cache local (fallback offline)
+            const cached = this._loadLocalCache();
+            if (cached) {
+                console.log('Dados carregados do cache local (modo offline)');
+                if (typeof showToast === 'function') {
+                    showToast('Sem conexao com o servidor. Usando dados em cache (somente leitura).', 'error');
+                }
+                return cached;
+            }
+
+            // Sem cache disponivel
+            if (typeof showToast === 'function') {
+                showToast('Falha ao carregar dados do servidor. Verifique sua conexao e recarregue a pagina.', 'error');
+            } else {
+                alert('Falha ao carregar dados do servidor. Os dados exibidos podem estar incompletos. Verifique sua conexao e recarregue a pagina.');
+            }
+            return this.createEmptyData();
+        }
+    },
+
+    // Cache local para fallback offline
+    _saveLocalCache(data) {
+        try {
+            // Criar copia sem receiptPDF para reduzir tamanho do cache
+            const lightData = JSON.parse(JSON.stringify(data));
+            if (lightData.expenses) {
+                Object.keys(lightData.expenses).forEach(month => {
+                    if (Array.isArray(lightData.expenses[month])) {
+                        lightData.expenses[month].forEach(exp => {
+                            if (exp.receiptPDF) {
+                                exp.receiptPDF = '[CACHED]';
+                            }
+                        });
+                    }
+                });
+            }
+            const cacheData = JSON.stringify(lightData);
+            // Verificar se cabe no localStorage (limite ~5MB)
+            if (cacheData.length > 4 * 1024 * 1024) {
+                console.warn('Cache local muito grande (' + (cacheData.length / 1024 / 1024).toFixed(1) + 'MB), pulando cache');
+                return;
+            }
+            localStorage.setItem('casadw_cache', cacheData);
+            localStorage.setItem('casadw_cache_time', new Date().toISOString());
+        } catch (e) {
+            // Se quota excedida, limpar cache antigo e tentar de novo
+            if (e.name === 'QuotaExceededError') {
+                console.warn('localStorage cheio, limpando cache antigo...');
+                localStorage.removeItem('casadw_cache');
+                localStorage.removeItem('casadw_cache_time');
+            } else {
+                console.warn('Nao foi possivel salvar cache local:', e);
+            }
+        }
+    },
+
+    _loadLocalCache() {
+        try {
+            const cached = localStorage.getItem('casadw_cache');
+            if (!cached) return null;
+            const cacheTime = localStorage.getItem('casadw_cache_time');
+            if (cacheTime) {
+                const age = Date.now() - new Date(cacheTime).getTime();
+                // Cache valido por 24 horas
+                if (age > 24 * 60 * 60 * 1000) {
+                    console.log('Cache local expirado (mais de 24h)');
+                    return null;
+                }
+            }
+            return JSON.parse(cached);
+        } catch (e) {
+            console.warn('Erro ao ler cache local:', e);
+            return null;
+        }
+    },
+
+    // Salvar TODOS os dados na nuvem (com debounce)
+    async saveAll(financialData) {
+        const currentUserId = window.getUserId ? window.getUserId() : USER_ID;
+
+        if (!currentUserId || !CLOUD_ENABLED) {
+            console.error('Cloud storage nao configurado ou USER_ID nao definido');
+            return false;
+        }
+
+        if (!this._dataLoaded) {
+            console.warn('saveAll bloqueado: dados ainda nao foram carregados da nuvem.');
+            return false;
+        }
+
+        if (this._saveTimeout) {
+            clearTimeout(this._saveTimeout);
+            console.log('Salvamento anterior cancelado (debounce)');
+        }
+
+        this._pendingSave = financialData;
+
+        return new Promise((resolve) => {
+            this._saveTimeout = setTimeout(async () => {
+                const dataToSave = this._pendingSave;
+                this._saveTimeout = null;
+                this._pendingSave = null;
+
+                // Se ja esta salvando, enfileirar para salvar depois
+                if (this._saving) {
+                    console.log('Salvamento em andamento, enfileirando...');
+                    this._saveQueue = dataToSave;
+                    resolve(true);
+                    return;
+                }
+
+                this._saving = true;
+                try {
+                    console.log('Salvando dados na nuvem...');
+
+                    const dataToSend = this.convertToAPI(dataToSave, currentUserId);
+
+                    const response = await cloudFetchWithTimeout(`${API_URL}/api/sync`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(dataToSend)
+                    });
+
+                    if (response.ok) {
+                        console.log('Dados salvos na nuvem!');
+                        resolve(true);
+                    } else {
+                        console.error('Erro ao salvar na nuvem:', response.status);
+                        if (typeof showToast === 'function') showToast('Erro ao salvar dados. Tente novamente.', 'error');
+                        resolve(false);
+                    }
+
+                } catch (error) {
+                    console.error('Erro ao salvar na nuvem:', error);
+                    if (typeof showToast === 'function') showToast('Erro ao salvar dados. Verifique sua conexao.', 'error');
+                    resolve(false);
+                } finally {
+                    this._saving = false;
+                    // Processar fila se houver salvamento pendente
+                    if (this._saveQueue) {
+                        const queuedData = this._saveQueue;
+                        this._saveQueue = null;
+                        console.log('Processando salvamento enfileirado...');
+                        this.saveAll(queuedData);
+                    }
+                }
+            }, 1000);
+        });
+    },
+
+    // Criar estrutura vazia
+    createEmptyData() {
+        const data = {
+            months: ['JANEIRO', 'FEVEREIRO', 'MARCO', 'ABRIL', 'MAIO', 'JUNHO',
+                     'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'],
+            currentMonth: new Date().getMonth(),
+            expenses: {},
+            income: {},
+            notes: {},
+            categories: ['Alimentacao', 'Carro', 'Transporte', 'Manutencao',
+                        'Farmacia', 'Outros', 'Pets', 'Hotel', 'Escritorio', 'Fornecedor'],
+            suppliers: ['Amoedo', 'Carrefour', 'Detail Wash', 'Droga Raia', 'Hortfruti',
+                       'Kalunga', 'Lave Bem', 'Outros', 'Pacheco', 'PetChic', 'Posto hum',
+                       'Prezunic', 'RM agua', 'Venancio', 'Zona Sul'],
+            paymentMethods: ['Cartao de Credito', 'Reembolso', 'Conta Corrente', 'Outros'],
+            years: [2024, 2025, 2026],
+            users: [
+                {
+                    username: 'admin',
+                    password: '[PROTEGIDO]',
+                    name: 'Administrador',
+                    role: 'admin'
+                }
+            ],
+            currentUser: null
+        };
+
+        for (let i = 0; i < 12; i++) {
+            data.expenses[i] = [];
+            data.income[i] = [];
+            data.notes[i] = '';
+        }
+
+        return data;
+    },
+
+    // Converter formato da API para formato do sistema
+    convertFromAPI(apiData) {
+        const data = this.createEmptyData();
+
+        if (apiData.expenses && Array.isArray(apiData.expenses)) {
+            apiData.expenses.forEach(exp => {
+                const itemsWithYear = (exp.items || []).map(item => ({
+                    ...item,
+                    year: item.date ? parseInt(item.date.substring(0, 4)) : (item.year || exp.year || new Date().getFullYear())
+                }));
+                data.expenses[exp.month] = (data.expenses[exp.month] || []).concat(itemsWithYear);
+            });
+        }
+
+        if (apiData.income && Array.isArray(apiData.income)) {
+            apiData.income.forEach(inc => {
+                const itemsWithYear = (inc.items || []).map(item => ({
+                    ...item,
+                    year: item.date ? parseInt(item.date.substring(0, 4)) : (item.year || inc.year || new Date().getFullYear())
+                }));
+                data.income[inc.month] = (data.income[inc.month] || []).concat(itemsWithYear);
+            });
+        }
+
+        if (apiData.notes && Array.isArray(apiData.notes)) {
+            apiData.notes.forEach(note => {
+                data.notes[note.month] = note.content || '';
+            });
+        }
+
+        if (apiData.systemUsers && Array.isArray(apiData.systemUsers)) {
+            data.users = apiData.systemUsers;
+        }
+
+        if (apiData.fleet) {
+            data.fleet = apiData.fleet;
+        }
+
+        if (apiData.maintenance && Array.isArray(apiData.maintenance)) {
+            data.maintenance = apiData.maintenance;
+        }
+
+        if (apiData.maintenanceTypes && Array.isArray(apiData.maintenanceTypes) && apiData.maintenanceTypes.length > 0) {
+            data.maintenanceTypes = apiData.maintenanceTypes;
+        }
+        if (apiData.maintenanceAreas && Array.isArray(apiData.maintenanceAreas) && apiData.maintenanceAreas.length > 0) {
+            data.maintenanceAreas = apiData.maintenanceAreas;
+        }
+
+        if (apiData.years && Array.isArray(apiData.years) && apiData.years.length > 0) {
+            data.years = apiData.years;
+        }
+        if (apiData.categories && Array.isArray(apiData.categories) && apiData.categories.length > 0) {
+            data.categories = apiData.categories;
+        }
+        if (apiData.suppliers && Array.isArray(apiData.suppliers) && apiData.suppliers.length > 0) {
+            data.suppliers = apiData.suppliers;
+        }
+        if (apiData.paymentMethods && Array.isArray(apiData.paymentMethods) && apiData.paymentMethods.length > 0) {
+            data.paymentMethods = apiData.paymentMethods;
+        }
+
+        return data;
+    },
+
+    // Converter formato do sistema para formato da API
+    convertToAPI(financialData, userId) {
+        const apiData = {
+            userId: userId || (window.getUserId ? window.getUserId() : USER_ID),
+            expenses: [],
+            income: [],
+            notes: [],
+            systemUsers: financialData.users || [],
+            fleet: financialData.fleet || { vehicles: [], updateDate: '' },
+            years: financialData.years || [2024, 2025, 2026],
+            categories: financialData.categories || [],
+            suppliers: financialData.suppliers || [],
+            paymentMethods: financialData.paymentMethods || [],
+            maintenance: financialData.maintenance || [],
+            maintenanceTypes: financialData.maintenanceTypes || [],
+            maintenanceAreas: financialData.maintenanceAreas || []
+        };
+
+        for (let i = 0; i < 12; i++) {
+            if (financialData.expenses[i] && financialData.expenses[i].length > 0) {
+                const byYear = {};
+                financialData.expenses[i].forEach(item => {
+                    const itemYear = item.date ? parseInt(item.date.substring(0, 4)) : new Date().getFullYear();
+                    if (!byYear[itemYear]) byYear[itemYear] = [];
+                    byYear[itemYear].push(item);
+                });
+                Object.entries(byYear).forEach(([year, items]) => {
+                    apiData.expenses.push({ month: i, year: parseInt(year), items });
+                });
+            }
+        }
+
+        for (let i = 0; i < 12; i++) {
+            if (financialData.income[i] && financialData.income[i].length > 0) {
+                const byYear = {};
+                financialData.income[i].forEach(item => {
+                    const itemYear = item.date ? parseInt(item.date.substring(0, 4)) : new Date().getFullYear();
+                    if (!byYear[itemYear]) byYear[itemYear] = [];
+                    byYear[itemYear].push(item);
+                });
+                Object.entries(byYear).forEach(([year, items]) => {
+                    apiData.income.push({ month: i, year: parseInt(year), items });
+                });
+            }
+        }
+
+        for (let i = 0; i < 12; i++) {
+            if (financialData.notes[i]) {
+                apiData.notes.push({
+                    month: i,
+                    year: new Date().getFullYear(),
+                    content: financialData.notes[i]
+                });
+            }
+        }
+
+        return apiData;
+    },
+
+    // Deletar todos os dados
+
+    // ===== OPERACOES ATOMICAS =====
+    // Adicionar despesa atomicamente (sem full replace)
+    async addExpenseAtomic(month, year, expense) {
+        const userId = window.getUserId ? window.getUserId() : USER_ID;
+        if (!userId || !CLOUD_ENABLED) return false;
+        try {
+            const resp = await cloudFetchWithTimeout(API_URL + '/api/expense', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, month, year, expense })
+            });
+            if (!resp.ok) {
+                console.error('Erro ao adicionar despesa atomica:', resp.status);
+                return false;
+            }
+            console.log('Despesa adicionada atomicamente no servidor');
+            return true;
+        } catch (e) {
+            console.error('Erro ao adicionar despesa atomica:', e);
+            return false;
+        }
+    },
+
+    // Editar despesa atomicamente
+    async editExpenseAtomic(month, year, index, expense, oldMonth, oldYear) {
+        const userId = window.getUserId ? window.getUserId() : USER_ID;
+        if (!userId || !CLOUD_ENABLED) return false;
+        try {
+            const body = { userId, month, year, index, expense };
+            if (oldMonth !== undefined && oldYear !== undefined) {
+                body.oldMonth = oldMonth;
+                body.oldYear = oldYear;
+            }
+            const resp = await cloudFetchWithTimeout(API_URL + '/api/expense', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if (!resp.ok) {
+                console.error('Erro ao editar despesa atomica:', resp.status);
+                return false;
+            }
+            console.log('Despesa editada atomicamente');
+            return true;
+        } catch (e) {
+            console.error('Erro ao editar despesa atomica:', e);
+            return false;
+        }
+    },
+
+    // Deletar despesa atomicamente
+    async deleteExpenseAtomic(month, year, index) {
+        const userId = window.getUserId ? window.getUserId() : USER_ID;
+        if (!userId || !CLOUD_ENABLED) return false;
+        try {
+            const resp = await cloudFetchWithTimeout(API_URL + '/api/expense', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, month, year, index })
+            });
+            if (!resp.ok) {
+                console.error('Erro ao deletar despesa atomica:', resp.status);
+                return false;
+            }
+            console.log('Despesa deletada atomicamente');
+            return true;
+        } catch (e) {
+            console.error('Erro ao deletar despesa atomica:', e);
+            return false;
+        }
+    },
+
+
+    // Deletar entrada atomicamente
+    async deleteIncomeAtomic(month, year, index) {
+        const userId = window.getUserId ? window.getUserId() : USER_ID;
+        if (!userId || !CLOUD_ENABLED) return false;
+        try {
+            const resp = await cloudFetchWithTimeout(API_URL + '/api/income', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, month, year, index })
+            });
+            if (!resp.ok) {
+                console.error('Erro ao deletar entrada atomica:', resp.status);
+                return false;
+            }
+            console.log('Entrada deletada atomicamente');
+            return true;
+        } catch (e) {
+            console.error('Erro ao deletar entrada atomica:', e);
+            return false;
+        }
+    },
+
+        // Recarregar dados do servidor (para sincronizar apos operacao atomica)
+    async reloadFromServer() {
+        try {
+            console.log('Recarregando dados do servidor apos operacao atomica...');
+            const data = await this.loadAll();
+            return data;
+        } catch (e) {
+            console.error('Erro ao recarregar dados do servidor:', e);
+            return null;
+        }
+    },
+
+    async deleteAll() {
+        const currentUserId = window.getUserId ? window.getUserId() : USER_ID;
+
+        if (!currentUserId || !CLOUD_ENABLED) {
+            console.error('Cloud storage nao configurado ou USER_ID nao definido');
+            return false;
+        }
+
+        try {
+            console.log('Deletando todos os dados da nuvem...');
+            const response = await cloudFetchWithTimeout(`${API_URL}/api/sync/${currentUserId}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                console.log('Dados deletados da nuvem!');
+                return true;
+            } else {
+                console.error('Erro ao deletar da nuvem');
+                return false;
+            }
+        } catch (error) {
+            console.error('Erro ao deletar:', error);
+            return false;
+        }
+    }
+};
+
+// Funcao chamada apos login
+window.setCloudUserId = function(userId) {
+    USER_ID = DATA_USER_ID;
+    localStorage.setItem('user-id', DATA_USER_ID);
+    CloudStorage._dataLoaded = false;
+    console.log('Usuario logado:', userId, '| Dados de:', DATA_USER_ID);
+};
+
+// Exportar para uso global
+window.CloudStorage = CloudStorage;
+window.getUserId = () => USER_ID;
+window.API_URL = API_URL;
+
+// Comando para deletar tudo
+window.deleteAllCloudData = async function() {
+    const confirmed = confirm(
+        'ATENCAO!\n\n' +
+        'Deletar TODOS os dados da nuvem?\n\n' +
+        'Isso eh IRREVERSIVEL!'
+    );
+
+    if (confirmed) {
+        await CloudStorage.deleteAll();
+        localStorage.removeItem('user-id');
+        window.location.reload();
+    }
+};
+
+console.log('CloudStorage pronto! (com JWT)');

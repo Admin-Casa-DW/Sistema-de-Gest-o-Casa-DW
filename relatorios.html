@@ -1,10 +1,22 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+    <script>
+    (function() {
+        const currentUser = localStorage.getItem("currentUser");
+        if (!currentUser) {
+            window.location.href = "/";
+        }
+    })();
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Relatórios - SISTEMA DE GESTÃO CASA DW</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="stylesheet" href="styles.css?v=1781100000">
+    <link rel="stylesheet" href="dark-override.css?v=1781100000">
+    <link rel="stylesheet" href="sidebar.css?v=1781100000">
+    <link rel="stylesheet" href="redesign-refinements.css?v=1781100000">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         .reports-container {
@@ -209,7 +221,7 @@
             }
 
             .back-button {
-                font-size: 13px;
+                font-size: 12px;
                 padding: 8px 15px;
                 margin-bottom: 15px;
             }
@@ -239,18 +251,19 @@
 
             .filter-group select,
             .filter-group input {
-                font-size: 13px;
+                font-size: 12px;
                 padding: 8px;
             }
 
             .filter-actions {
                 flex-wrap: wrap;
+                gap: 8px;
             }
 
             .filter-actions button {
                 font-size: 12px;
-                padding: 8px 12px;
-                flex: 1 1 calc(50% - 5px);
+                padding: 8px 15px;
+                flex: 1 1 calc(50% - 4px);
             }
 
             .results-section {
@@ -261,8 +274,9 @@
                 font-size: 16px;
             }
 
+            /* Summary cards - 2 colunas */
             .results-summary {
-                grid-template-columns: 1fr;
+                grid-template-columns: 1fr 1fr;
                 gap: 10px;
             }
 
@@ -271,21 +285,22 @@
             }
 
             .summary-item label {
-                font-size: 11px;
+                font-size: 12px;
             }
 
             .summary-item .value {
-                font-size: 20px;
+                font-size: 18px;
             }
 
             /* Table scroll horizontal */
             #tableContainer {
                 overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
             }
 
             .report-table {
                 font-size: 12px;
-                min-width: 700px;
+                min-width: 500px;
             }
 
             .report-table th,
@@ -305,6 +320,10 @@
         }
 
         @media (max-width: 480px) {
+            .reports-container {
+                padding: 10px;
+            }
+
             .reports-container h1 {
                 font-size: 16px;
             }
@@ -313,17 +332,40 @@
                 font-size: 15px;
             }
 
-            .filter-actions button {
-                flex: 1 1 100%;
-                font-size: 13px;
+            .filters-section {
+                padding: 10px;
             }
 
+            .filter-actions {
+                gap: 5px;
+            }
+
+            .filter-actions button {
+                flex: 1 1 100%;
+                font-size: 11px;
+                padding: 8px 12px;
+            }
+
+            /* Summary 1 coluna em telas muito pequenas */
             .results-summary {
+                grid-template-columns: 1fr;
                 gap: 8px;
             }
 
             .summary-item .value {
-                font-size: 18px;
+                font-size: 16px;
+            }
+
+            .results-section {
+                padding: 10px;
+            }
+
+            .chart-container {
+                padding: 10px;
+            }
+
+            .chart-title {
+                font-size: 14px;
             }
 
             .report-table {
@@ -504,7 +546,12 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="config.js"></script>
-    <script src="relatorios.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="config.js?v=1781100000"></script>
+    <script src="jwt-interceptor.js?v=1781100000"></script>
+    <script src="relatorios.js?v=1781100000"></script>
+    <script src="sidebar.js?v=1781100000"></script>
+    <script src="redesign-refinements.js?v=1781100000"></script>
 </body>
 </html>

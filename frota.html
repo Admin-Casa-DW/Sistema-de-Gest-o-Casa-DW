@@ -1,10 +1,22 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+    <script>
+    (function() {
+        const currentUser = localStorage.getItem("currentUser");
+        if (!currentUser) {
+            window.location.href = "/";
+        }
+    })();
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Frota - SISTEMA DE GESTÃO CASA DW</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="stylesheet" href="styles.css?v=1780800000">
+    <link rel="stylesheet" href="dark-override.css?v=1780800000">
+    <link rel="stylesheet" href="sidebar.css?v=1780800000">
+    <link rel="stylesheet" href="redesign-refinements.css?v=1780800000">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         .frota-container {
@@ -320,6 +332,8 @@
         .btn-icon.view:hover { background: #c8e6c9; }
         .btn-icon.history { background: #fff3e0; color: #f57c00; }
         .btn-icon.history:hover { background: #ffe0b2; }
+        .btn-icon.fuel { background: #e8eaf6; color: #5c6bc0; }
+        .btn-icon.fuel:hover { background: #c5cae9; }
 
         /* Modal */
         .modal-overlay {
@@ -500,6 +514,151 @@
             color: #bdc3c7;
         }
 
+        /* Alerts Section */
+        .alerts-section {
+            background: white;
+            padding: 20px 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .alerts-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .alert-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .alert-item:last-child {
+            border-bottom: none;
+        }
+
+        .alert-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+            flex-shrink: 0;
+        }
+
+        .alert-icon.overdue {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .alert-icon.soon {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
+        .alert-info {
+            flex: 1;
+        }
+
+        .alert-info strong {
+            font-size: 14px;
+            color: #2c3e50;
+        }
+
+        .alert-info small {
+            font-size: 12px;
+            color: #7f8c8d;
+            display: block;
+        }
+
+        .alert-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-alert-action {
+            background: none;
+            border: 1px solid #ddd;
+            padding: 6px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            color: #7f8c8d;
+            transition: all 0.2s;
+        }
+
+        .btn-alert-action:hover {
+            background: #f8f9fa;
+            color: #2c3e50;
+            border-color: #000;
+        }
+
+        .alert-group-title {
+            font-size: 13px;
+            font-weight: 700;
+            padding: 10px 12px;
+            margin: 15px 0 10px 0;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .alert-group-overdue {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .alert-group-soon {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
+        .alert-tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-right: 6px;
+        }
+
+        .overdue-tag {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .soon-tag {
+            background: #f39c12;
+            color: white;
+        }
+
+        .alert-item.alert-overdue {
+            background: #fff5f5;
+            padding: 12px;
+            border-radius: 8px;
+            border-bottom: 1px solid #ffebee;
+        }
+
+        .alert-item.alert-soon {
+            background: #fffbf5;
+            padding: 12px;
+            border-radius: 8px;
+            border-bottom: 1px solid #fff3e0;
+        }
+
         /* Print styles */
         @media print {
             body { background: white; padding: 0; }
@@ -544,28 +703,30 @@
 
             .frota-header-right button {
                 font-size: 12px;
-                padding: 8px 10px;
+                padding: 8px 15px;
             }
 
+            /* Dashboard cards - 2 colunas */
             .status-cards {
-                grid-template-columns: repeat(2, 1fr);
+                grid-template-columns: 1fr 1fr;
                 gap: 10px;
             }
 
             .status-card {
-                padding: 15px;
+                padding: 12px;
             }
 
-            .card-icon {
-                font-size: 20px;
+            .status-card .card-icon {
+                font-size: 18px;
+                margin-bottom: 8px;
             }
 
-            .card-value {
-                font-size: 24px;
+            .status-card .card-value {
+                font-size: 18px;
             }
 
-            .card-label {
-                font-size: 11px;
+            .status-card .card-label {
+                font-size: 10px;
             }
 
             .filters-section {
@@ -581,6 +742,37 @@
                 min-width: 100%;
             }
 
+            .filter-group select,
+            .filter-group input {
+                font-size: 12px;
+                padding: 8px;
+            }
+
+            /* Alerts mobile */
+            .alerts-section {
+                padding: 15px;
+            }
+
+            .alert-item {
+                gap: 8px;
+                padding: 10px 0;
+            }
+
+            .alert-icon {
+                width: 30px;
+                height: 30px;
+                font-size: 13px;
+            }
+
+            .alert-info strong {
+                font-size: 13px;
+            }
+
+            .alert-info small {
+                font-size: 11px;
+            }
+
+            /* Tabela scroll horizontal */
             .vehicles-section {
                 padding: 15px;
                 overflow-x: auto;
@@ -588,12 +780,13 @@
 
             .vehicles-table {
                 font-size: 12px;
-                min-width: 900px;
+                min-width: 500px;
             }
 
             .vehicles-table th,
             .vehicles-table td {
-                padding: 10px 8px;
+                padding: 8px 6px;
+                white-space: nowrap;
             }
 
             .action-btns {
@@ -601,11 +794,33 @@
             }
 
             .btn-icon {
-                width: 28px;
-                height: 28px;
-                font-size: 11px;
+                width: 40px;
+                height: 40px;
+                font-size: 13px;
             }
 
+            /* Grid de faturas responsivo */
+            .invoice-item {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+
+            .invoice-icon {
+                display: none;
+            }
+
+            .invoice-actions {
+                flex-direction: row;
+                flex-wrap: wrap;
+            }
+
+            /* Grid de abastecimentos responsivo */
+            .abastecimento-stats {
+                grid-template-columns: 1fr 1fr !important;
+                gap: 10px;
+            }
+
+            /* Modal mobile */
             .modal {
                 max-width: 95%;
                 margin: 10px;
@@ -622,6 +837,7 @@
                 font-size: 16px;
             }
 
+            /* Form grid mobile - 1 coluna */
             .form-row {
                 grid-template-columns: 1fr;
                 gap: 10px;
@@ -665,6 +881,19 @@
                 gap: 5px;
                 padding: 12px;
             }
+
+            /* Tabs mobile - scroll horizontal */
+            .vehicle-tabs {
+                overflow-x: auto;
+                flex-wrap: nowrap;
+                padding: 8px 0;
+            }
+
+            .vehicle-tab {
+                padding: 8px 15px;
+                font-size: 12px;
+                white-space: nowrap;
+            }
         }
 
         @media (max-width: 480px) {
@@ -673,11 +902,16 @@
             }
 
             .frota-subtitle {
-                font-size: 10px;
+                font-size: 12px;
             }
 
+            /* Dashboard 1 coluna em telas muito pequenas */
             .status-cards {
                 grid-template-columns: 1fr;
+            }
+
+            .status-card .card-value {
+                font-size: 16px;
             }
 
             /* Modal full screen mobile - slide up */
@@ -691,20 +925,578 @@
                 width: 100%;
                 margin: 0;
                 border-radius: 15px 15px 0 0;
+                max-height: 92dvh;
                 max-height: 92vh;
                 overflow-y: auto;
             }
 
+            .modal-header h2 {
+                font-size: 15px;
+            }
+
             .modal-close {
                 font-size: 24px;
-                width: 32px;
-                height: 32px;
+                width: 40px;
+                height: 40px;
+            }
+
+            /* Abastecimentos - 1 coluna no mobile */
+            .abastecimento-stats {
+                grid-template-columns: 1fr !important;
+            }
+
+            /* Vehicles table mobile */
+            .vehicles-table {
+                min-width: 400px;
             }
 
             .frota-header-right {
                 grid-template-columns: 1fr;
             }
+
+            .frota-header-right button {
+                font-size: 11px;
+                padding: 8px 12px;
+            }
+
+            .vehicles-section {
+                padding: 10px;
+            }
+
+            .alerts-section {
+                padding: 10px;
+            }
+
+            .filters-section {
+                padding: 10px;
+            }
         }
+
+        /* Sistema de Notas Fiscais */
+        .invoice-item {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            gap: 12px;
+            align-items: start;
+            transition: all 0.2s;
+        }
+
+        .invoice-item:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-color: #000;
+        }
+
+        .invoice-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 18px;
+        }
+
+        .invoice-icon.image {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .invoice-info {
+            min-width: 0;
+        }
+
+        .invoice-name {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 5px;
+            word-break: break-word;
+        }
+
+        .invoice-obs {
+            font-size: 13px;
+            color: #666;
+            margin-top: 5px;
+            padding: 6px 10px;
+            background: white;
+            border-radius: 5px;
+            border-left: 3px solid #667eea;
+        }
+
+        .invoice-obs-input {
+            width: 100%;
+            padding: 6px 10px;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            font-size: 13px;
+            margin-top: 5px;
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        .invoice-actions {
+            display: flex;
+            gap: 5px;
+            flex-direction: column;
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .btn-sm.btn-success {
+            background: #27ae60;
+            color: white;
+        }
+
+        .btn-sm.btn-success:hover {
+            background: #229954;
+        }
+
+        .btn-sm.btn-info {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-sm.btn-info:hover {
+            background: #2980b9;
+        }
+
+        .btn-sm.btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .btn-sm.btn-danger:hover {
+            background: #c0392b;
+        }
+
+        .btn-sm.btn-secondary {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .btn-sm.btn-secondary:hover {
+            background: #7f8c8d;
+        }
+
+        .invoice-meta {
+            font-size: 12px;
+            color: #999;
+        }
+
+        /* Sistema de Abas */
+        .vehicle-tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .vehicle-tab {
+            background: none;
+            border: none;
+            padding: 12px 20px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #7f8c8d;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .vehicle-tab:hover {
+            color: #2c3e50;
+            background: #f8f9fa;
+        }
+
+        .vehicle-tab.active {
+            color: #000;
+            font-weight: 600;
+            border-bottom-color: #000;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Estatísticas de Abastecimento */
+        .abastecimento-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-card .value {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-card .label {
+            font-size: 12px;
+            opacity: 0.9;
+            text-transform: uppercase;
+        }
+
+        /* Formulário de Abastecimento */
+        .abastecimento-form {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 25px;
+        }
+
+        .abastecimento-form h3 {
+            font-size: 16px;
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+
+        /* Lista de Abastecimentos */
+        .abastecimentos-section h3 {
+            font-size: 16px;
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+
+        .abastecimento-item {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 15px;
+            align-items: start;
+        }
+
+        .abastecimento-item:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .abast-main {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .abast-date {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .abast-km {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .abast-combustivel {
+            background: #e3f2fd;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            color: #1976d2;
+        }
+
+        .abast-valor {
+            color: #27ae60;
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .abast-pagamento {
+            font-size: 13px;
+            color: #7f8c8d;
+        }
+
+        .abast-details {
+            grid-column: 1 / -1;
+            font-size: 12px;
+            color: #7f8c8d;
+            margin-top: 5px;
+        }
+
+        .abast-actions {
+            display: flex;
+            gap: 5px;
+            flex-direction: column;
+        }
+
+        .badge-lancado {
+            background: #27ae60;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        /* Custo KM Badge no Card */
+        .custo-km-badge {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            display: inline-block;
+            margin-top: 5px;
+        }
+
+        /* Fleet Dashboard */
+        .fleet-dashboard {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 25px;
+        }
+
+        .fleet-dashboard .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .fleet-dashboard .dashboard-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .dashboard-filters {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .dashboard-filters select {
+            padding: 8px 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 13px;
+            background: white;
+        }
+
+        .dashboard-filters select:focus {
+            outline: none;
+            border-color: #000;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .chart-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .chart-card h4 {
+            font-size: 14px;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .chart-card canvas {
+            width: 100% !important;
+            max-height: 300px;
+        }
+
+        .dashboard-summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .dash-summary-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 18px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .dash-summary-card.green { background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%); }
+        .dash-summary-card.orange { background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%); }
+        .dash-summary-card.red { background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); }
+        .dash-summary-card.blue { background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); }
+
+        .dash-summary-card .dash-value {
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .dash-summary-card .dash-label {
+            font-size: 11px;
+            opacity: 0.9;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Abastecimentos Modal (dedicated) */
+        .abast-modal-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .abast-modal-stat {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .abast-modal-stat .stat-val { font-size: 20px; font-weight: 700; }
+        .abast-modal-stat .stat-lbl { font-size: 11px; opacity: 0.9; text-transform: uppercase; }
+
+        @media (max-width: 768px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+            .dashboard-summary-cards {
+                grid-template-columns: 1fr 1fr;
+            }
+            .dashboard-filters {
+                width: 100%;
+            }
+            .dashboard-filters select {
+                flex: 1;
+                min-width: 0;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .dashboard-summary-cards {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Evolution Chart (full width) */
+        .chart-card-full {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            border: 1px solid #e2e8f0;
+            margin-top: 20px;
+        }
+        .chart-card-full h4 {
+            font-size: 14px;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .chart-card-full canvas {
+            width: 100% !important;
+            max-height: 280px;
+        }
+
+        /* Doc Alerts (IPVA/Licenciamento/Seguro) */
+        .doc-alerts-section {
+            background: #f8f9fa;
+            padding: 20px 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 15px;
+        }
+        .doc-alert-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+        .doc-alert-item.alert-overdue {
+            background: #fde8e8;
+            border-left: 4px solid #e74c3c;
+        }
+        .doc-alert-item.alert-soon {
+            background: #fef3cd;
+            border-left: 4px solid #f39c12;
+        }
+        .doc-alert-item .da-icon {
+            width: 30px; height: 30px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px; flex-shrink: 0;
+        }
+        .doc-alert-item .da-icon.ipva { background: #e8f5e9; color: #2e7d32; }
+        .doc-alert-item .da-icon.lic { background: #e3f2fd; color: #1565c0; }
+        .doc-alert-item .da-icon.seg { background: #fce4ec; color: #c62828; }
+        .doc-alert-item .da-info { flex: 1; }
+        .doc-alert-item .da-info strong { display: block; color: #2c3e50; }
+        .doc-alert-item .da-info small { color: #666; }
+        .da-tag {
+            display: inline-block; padding: 2px 8px; border-radius: 4px;
+            font-size: 10px; font-weight: 700; text-transform: uppercase;
+        }
+        .da-tag.ipva { background: #e8f5e9; color: #2e7d32; }
+        .da-tag.lic { background: #e3f2fd; color: #1565c0; }
+        .da-tag.seg { background: #fce4ec; color: #c62828; }
+
+        /* Relatório button */
+        .btn-relatorio {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; border: none; padding: 8px 16px;
+            border-radius: 6px; cursor: pointer; font-size: 13px;
+            display: inline-flex; align-items: center; gap: 6px;
+            transition: opacity 0.2s;
+        }
+        .btn-relatorio:hover { opacity: 0.9; }
     </style>
 </head>
 <body>
@@ -727,6 +1519,9 @@
                 </button>
                 <button class="btn btn-secondary" id="btnImprimir">
                     <i class="fas fa-print"></i> Imprimir
+                </button>
+                <button class="btn-relatorio" id="btnRelatorio" onclick="generateFleetReport()">
+                    <i class="fas fa-file-pdf"></i> Relatório PDF
                 </button>
                 <button class="btn btn-secondary" id="btnVoltar">
                     <i class="fas fa-arrow-left"></i> Voltar
@@ -755,6 +1550,87 @@
                 <div class="card-icon"><i class="fas fa-file-shield"></i></div>
                 <div class="card-value" id="totalSeguradoras">0</div>
                 <div class="card-label">Seguradoras</div>
+            </div>
+        </div>
+
+        <!-- Alerts Section -->
+        <div class="alerts-section" id="alertsSection" style="display:none;">
+            <div class="alerts-title">
+                <i class="fas fa-bell" style="color:#e74c3c;"></i> Alertas de Revisão
+            </div>
+            <div id="alertsList"></div>
+        </div>
+
+        <!-- Document Alerts (IPVA, Licenciamento, Seguro) -->
+        <div class="doc-alerts-section" id="docAlertsSection" style="display:none;">
+            <div class="alerts-title">
+                <i class="fas fa-file-contract" style="color:#f39c12;"></i> Alertas de Documentos (IPVA / Licenciamento / Seguro)
+            </div>
+            <div id="docAlertsList"></div>
+        </div>
+
+        <!-- Fleet Dashboard -->
+        <div class="fleet-dashboard" id="fleetDashboard">
+            <div class="dashboard-header">
+                <div class="dashboard-title">
+                    <i class="fas fa-chart-bar"></i> Dashboard da Frota
+                </div>
+                <div class="dashboard-filters">
+                    <select id="dashboardMonth" onchange="updateFleetDashboard()">
+                        <option value="0">Janeiro</option>
+                        <option value="1">Fevereiro</option>
+                        <option value="2">Março</option>
+                        <option value="3">Abril</option>
+                        <option value="4">Maio</option>
+                        <option value="5">Junho</option>
+                        <option value="6">Julho</option>
+                        <option value="7">Agosto</option>
+                        <option value="8">Setembro</option>
+                        <option value="9">Outubro</option>
+                        <option value="10">Novembro</option>
+                        <option value="11">Dezembro</option>
+                    </select>
+                    <select id="dashboardYear" onchange="updateFleetDashboard()">
+                    </select>
+                </div>
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="dashboard-summary-cards" id="dashSummaryCards">
+                <div class="dash-summary-card blue">
+                    <div class="dash-value" id="dashTotalKm">0 km</div>
+                    <div class="dash-label">Total KM Rodados</div>
+                </div>
+                <div class="dash-summary-card green">
+                    <div class="dash-value" id="dashTotalGasto">R$ 0</div>
+                    <div class="dash-label">Total Combustível</div>
+                </div>
+                <div class="dash-summary-card orange">
+                    <div class="dash-value" id="dashTotalLitros">0 L</div>
+                    <div class="dash-label">Total Litros</div>
+                </div>
+                <div class="dash-summary-card red">
+                    <div class="dash-value" id="dashCustoMedioKm">R$ 0,00</div>
+                    <div class="dash-label">Custo Médio/KM</div>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <h4><i class="fas fa-road"></i> KM Rodados por Veículo</h4>
+                    <canvas id="chartKmPorVeiculo"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h4><i class="fas fa-gas-pump"></i> Gasto com Combustível por Veículo</h4>
+                    <canvas id="chartGastoPorVeiculo"></canvas>
+                </div>
+            </div>
+
+            <!-- Evolution Chart (12 months) -->
+            <div class="chart-card-full">
+                <h4><i class="fas fa-chart-line"></i> Evolução Mensal — Custo da Frota (últimos 12 meses)</h4>
+                <canvas id="chartEvolucaoMensal"></canvas>
             </div>
         </div>
 
@@ -836,9 +1712,25 @@
                 <button class="modal-close" id="btnCloseVehicleModal">&times;</button>
             </div>
             <div class="modal-body">
+                <!-- Sistema de Abas -->
+                <div class="vehicle-tabs">
+                    <button type="button" class="vehicle-tab active" id="tabDadosBasicos" onclick="switchToTab('dadosBasicos')">
+                        <i class="fas fa-car"></i> Dados Básicos
+                    </button>
+                    <button type="button" class="vehicle-tab" id="tabDocumentos" onclick="switchToTab('documentos')">
+                        <i class="fas fa-file-pdf"></i> Documentos
+                    </button>
+                    <button type="button" class="vehicle-tab" id="tabAbastecimentos" onclick="switchToTab('abastecimentos')">
+                        <i class="fas fa-gas-pump"></i> Abastecimentos
+                    </button>
+                </div>
+
                 <form id="vehicleForm">
                     <input type="hidden" id="vehicleIndex" value="-1">
-                    <div class="form-row">
+
+                    <!-- Aba 1: Dados Básicos -->
+                    <div class="tab-content active" id="contentDadosBasicos">
+                        <div class="form-row">
                         <div class="form-group">
                             <label>Marca *</label>
                             <input type="text" id="vMarca" required placeholder="Ex: TOYOTA">
@@ -905,22 +1797,154 @@
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label><i class="fas fa-file-pdf"></i> Documento do Veículo (PDF)</label>
+                            <label><i class="fas fa-money-bill-wave"></i> Vencimento IPVA</label>
+                            <input type="date" id="vIpvaVencimento">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-id-card"></i> Vencimento Licenciamento</label>
+                            <input type="date" id="vLicenciamentoVencimento">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-file-shield"></i> Vencimento Seguro</label>
+                            <input type="date" id="vSeguroVencimento">
+                        </div>
+                    </div>
+                    </div>
+                    <!-- Fim Aba Dados Básicos -->
+
+                    <!-- Aba 2: Documentos -->
+                    <div class="tab-content" id="contentDocumentos">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label><i class="fas fa-file-pdf"></i> Documento do Veículo (PDF)</label>
                             <input type="file" id="vDocumento" accept=".pdf" style="padding:8px;">
                             <small id="documentoFileName" style="display:block;margin-top:5px;color:#666;"></small>
                         </div>
-                        <div class="form-group">
-                            <label><i class="fas fa-file-invoice"></i> Notas Fiscais de Serviço (PDF)</label>
-                            <input type="file" id="vNotasFiscais" accept=".pdf" style="padding:8px;">
-                            <small id="notasFileName" style="display:block;margin-top:5px;color:#666;"></small>
-                        </div>
                     </div>
+
+                    <!-- Sistema de Múltiplas Notas Fiscais -->
                     <div class="form-row">
                         <div class="form-group" style="grid-column: 1 / -1;">
-                            <label>Observações</label>
-                            <textarea id="vObservacoes" placeholder="Observações gerais sobre o veículo"></textarea>
+                            <label><i class="fas fa-file-invoice"></i> Notas Fiscais / Documentos de Compra</label>
+                            <div style="background:#f8f9fa;border:2px dashed #dee2e6;border-radius:8px;padding:15px;margin-bottom:10px;">
+                                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                                    <input type="file" id="vNotasFiscaisUpload" accept=".pdf,image/*" multiple style="flex:1;padding:8px;">
+                                    <button type="button" class="btn btn-primary" onclick="addInvoiceFiles()" style="white-space:nowrap;">
+                                        <i class="fas fa-plus"></i> Adicionar
+                                    </button>
+                                </div>
+                                <small style="color:#666;"><i class="fas fa-info-circle"></i> Selecione um ou mais arquivos PDF/imagem e clique em "Adicionar"</small>
+                            </div>
+
+                            <!-- Lista de notas fiscais -->
+                            <div id="invoicesList" style="display:none;margin-top:15px;">
+                                <div style="background:white;border:1px solid #dee2e6;border-radius:8px;padding:15px;">
+                                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
+                                        <strong style="color:#2c3e50;"><i class="fas fa-list"></i> Notas Fiscais Anexadas (<span id="invoicesCount">0</span>)</strong>
+                                        <button type="button" class="btn btn-sm btn-secondary" onclick="toggleInvoicesList()" id="toggleInvoicesBtn">
+                                            <i class="fas fa-chevron-up"></i> Recolher
+                                        </button>
+                                    </div>
+                                    <div id="invoicesListContent"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
+
+                        <div class="form-row">
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label>Observações Gerais do Veículo</label>
+                                <textarea id="vObservacoes" placeholder="Observações gerais sobre o veículo" rows="3"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Fim Aba Documentos -->
+
+                    <!-- Aba 3: Abastecimentos -->
+                    <div class="tab-content" id="contentAbastecimentos">
+                        <!-- Estatísticas -->
+                        <div class="abastecimento-stats">
+                            <div class="stat-card">
+                                <div class="value" id="statCustoPorKm">R$ 0,00</div>
+                                <div class="label">Custo por KM</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="value" id="statTotalGasto">R$ 0,00</div>
+                                <div class="label">Total Gasto</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="value" id="statKmRodados">0 km</div>
+                                <div class="label">KM Rodados</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="value" id="statConsumoMedio">-</div>
+                                <div class="label">Consumo Médio</div>
+                            </div>
+                        </div>
+
+                        <!-- Formulário de Novo Abastecimento -->
+                        <div class="abastecimento-form">
+                            <h3><i class="fas fa-plus"></i> Novo Abastecimento</h3>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Data *</label>
+                                    <input type="date" id="abastData">
+                                </div>
+                                <div class="form-group">
+                                    <label>KM Atual *</label>
+                                    <input type="text" id="abastKm" placeholder="Ex: 45.230">
+                                </div>
+                                <div class="form-group">
+                                    <label>Valor (R$) *</label>
+                                    <input type="number" id="abastValor" step="0.01" placeholder="Ex: 250.00">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Combustível *</label>
+                                    <select id="abastCombustivel">
+                                        <option value="">Selecione...</option>
+                                        <option value="Gasolina">Gasolina</option>
+                                        <option value="Etanol">Etanol</option>
+                                        <option value="Diesel">Diesel</option>
+                                        <option value="GNV">GNV</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Forma de Pagamento *</label>
+                                    <select id="abastFormaPagamento">
+                                        <option value="">Selecione...</option>
+                                        <option value="Sem Parar">Sem Parar</option>
+                                        <option value="Cartão de Crédito">Cartão de Crédito</option>
+                                        <option value="Dinheiro">Dinheiro</option>
+                                        <option value="Pix">Pix</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Litros</label>
+                                    <input type="number" id="abastLitros" step="0.01" placeholder="Ex: 42.5">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group" style="grid-column: 1 / -1;">
+                                    <label>Observações</label>
+                                    <textarea id="abastObs" placeholder="Observações sobre o abastecimento"></textarea>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <button type="button" class="btn btn-primary" onclick="addAbastecimento()">
+                                    <i class="fas fa-plus"></i> Adicionar
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Histórico de Abastecimentos -->
+                        <div class="abastecimentos-section">
+                            <h3><i class="fas fa-list"></i> Histórico de Abastecimentos</h3>
+                            <div id="abastecimentosList"></div>
+                        </div>
+                    </div>
+                    <!-- Fim Aba Abastecimentos -->
                 </form>
             </div>
             <div class="modal-footer">
@@ -985,8 +2009,111 @@
         </div>
     </div>
 
-    <script src="config.js"></script>
-    <script src="cloud-storage.js"></script>
-    <script src="frota.js"></script>
+    <!-- Abastecimentos Modal (dedicated, accessed from action button) -->
+    <div class="modal-overlay" id="abastecimentosModal">
+        <div class="modal" style="max-width:900px;">
+            <div class="modal-header">
+                <h2 id="abastModalTitle"><i class="fas fa-gas-pump"></i> Abastecimentos</h2>
+                <button class="modal-close" onclick="closeAbastecimentosModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Stats -->
+                <div class="abast-modal-stats" id="abastModalStats"></div>
+
+                <!-- Quick Add Form -->
+                <div class="abastecimento-form" style="margin-bottom:20px;">
+                    <h3><i class="fas fa-plus"></i> Novo Abastecimento</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Data *</label>
+                            <input type="date" id="abastModalData">
+                        </div>
+                        <div class="form-group">
+                            <label>KM Atual *</label>
+                            <input type="text" id="abastModalKm" placeholder="Ex: 45.230">
+                        </div>
+                        <div class="form-group">
+                            <label>Valor (R$) *</label>
+                            <input type="number" id="abastModalValor" step="0.01" placeholder="Ex: 250.00">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Combustível *</label>
+                            <select id="abastModalCombustivel">
+                                <option value="">Selecione...</option>
+                                <option value="Gasolina">Gasolina</option>
+                                <option value="Etanol">Etanol</option>
+                                <option value="Diesel">Diesel</option>
+                                <option value="GNV">GNV</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Forma de Pagamento *</label>
+                            <select id="abastModalFormaPagamento">
+                                <option value="">Selecione...</option>
+                                <option value="Sem Parar">Sem Parar</option>
+                                <option value="Cartão de Crédito">Cartão de Crédito</option>
+                                <option value="Dinheiro">Dinheiro</option>
+                                <option value="Pix">Pix</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Litros</label>
+                            <input type="number" id="abastModalLitros" step="0.01" placeholder="Ex: 42.5">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label>Observações</label>
+                            <textarea id="abastModalObs" placeholder="Observações sobre o abastecimento"></textarea>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-primary" onclick="addAbastecimentoFromModal()">
+                        <i class="fas fa-plus"></i> Adicionar Abastecimento
+                    </button>
+                </div>
+
+                <!-- History list -->
+                <div>
+                    <h3 style="font-size:16px;color:#2c3e50;margin-bottom:15px;"><i class="fas fa-list"></i> Histórico de Abastecimentos</h3>
+                    <div id="abastModalList"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeAbastecimentosModal()">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+    <script src="https://unpkg.com/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+    <script src="config.js?v=1780800000"></script>
+    <script src="jwt-interceptor.js?v=1780800000"></script>
+    <script src="cloud-storage.js?v=1780800000"></script>
+    <script src="frota.js?v=1780800000"></script>
+
+    <script>
+    function switchToTab(tabName) {
+        // Remover active de todas as abas
+        document.querySelectorAll('.vehicle-tab').forEach(tab => tab.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+        // Ativar aba selecionada
+        document.getElementById(`tab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`).classList.add('active');
+        document.getElementById(`content${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`).classList.add('active');
+
+        // Se for aba de abastecimentos, renderizar
+        if (tabName === 'abastecimentos') {
+            if (typeof renderAbastecimentosList === 'function') {
+                renderAbastecimentosList();
+                renderAbastecimentosStats();
+            }
+        }
+    }
+    </script>
+    <script src="sidebar.js?v=1780800000"></script>
+    <script src="redesign-refinements.js?v=1780800000"></script>
 </body>
 </html>

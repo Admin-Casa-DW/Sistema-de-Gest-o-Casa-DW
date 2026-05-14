@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SISTEMA DE GESTÃO CASA DW</title>
-    <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <!-- PWA -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#2c3e50">
@@ -13,10 +12,10 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Casa DW">
     <link rel="apple-touch-icon" href="/logo-dw.png">
-    <link rel="stylesheet" href="styles.css?v=1780300000">
-    <link rel="stylesheet" href="dark-override.css?v=1780300000">
-    <link rel="stylesheet" href="sidebar.css?v=1780300000">
-    <link rel="stylesheet" href="redesign-refinements.css?v=1781600000">
+    <link rel="stylesheet" href="styles.css?v=1778520000">
+    <link rel="stylesheet" href="dark-override.css?v=1778520000">
+    <link rel="stylesheet" href="sidebar.css?v=1778520000">
+    <link rel="stylesheet" href="redesign-refinements.css?v=1778520000">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css">
     <style>
@@ -718,7 +717,7 @@
                     <label>Nota Fiscal / Recibo (opcional)</label>
                     <div class="receipt-drive-container">
                         <!-- Botão Digitalizar (câmera, igual ao Google Drive) -->
-                        <button type="button" id="btnScanReceipt" class="receipt-drive-btn receipt-drive-scan" onclick="captureReceipt()">
+                        <button type="button" id="captureReceiptBtn" class="receipt-drive-btn receipt-drive-scan">
                             <span class="receipt-drive-icon">
                                 <i class="fas fa-camera"></i>
                             </span>
@@ -747,212 +746,46 @@
         </div>
     </div>
 
-    <!-- Modal for Document Scanner / Image Editor -->
-<div id="cropperModal" class="modal editor-modal">
-    <div class="modal-content editor-content">
-        <!-- Header with steps -->
-        <div class="editor-header">
-            <div class="editor-title">
-                <i class="fas fa-file-alt"></i>
-                <span>Digitalizar Documento</span>
-                <span id="cropperQueueBadge" class="editor-queue-badge"></span>
+    <!-- Modal for Image Cropper -->
+    <div id="cropperModal" class="modal">
+        <div class="modal-content modal-cropper">
+            <div class="modal-header">
+                <h2><i class="fas fa-crop"></i> Editar Imagem <span id="cropperQueueBadge" style="display:none; font-size:13px; font-weight:400; color:#7f8c8d; margin-left:8px;"></span></h2>
+                <span class="close" onclick="closeCropperModal()">&times;</span>
             </div>
-            <div class="scanner-steps" id="scannerSteps">
-                <div class="scanner-step active" data-step="1">
-                    <span class="step-num">1</span>
-                    <span class="step-label">Detectar</span>
-                </div>
-                <div class="scanner-step" data-step="2">
-                    <span class="step-num">2</span>
-                    <span class="step-label">Ajustar</span>
-                </div>
-                <div class="scanner-step" data-step="3">
-                    <span class="step-num">3</span>
-                    <span class="step-label">Revisar</span>
-                </div>
-            </div>
-            <button class="editor-close" onclick="closeCropperModal()" title="Fechar">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-
-        <!-- ========== STEP 1: Detect / Crop ========== -->
-        <div class="scanner-panel" id="scannerStep1" style="display:flex; flex-direction:column; flex:1; min-height:0;">
-            <!-- Toolbar -->
-            <div class="editor-toolbar">
-                <div class="toolbar-group">
-                    <button type="button" class="toolbar-btn toolbar-btn-accent" onclick="autoDetectEdges()" title="Detectar bordas automaticamente" id="btnAutoDetect">
-                        <i class="fas fa-crosshairs"></i>
-                        <span class="toolbar-label">Auto Detectar</span>
+            <div class="cropper-container-wrapper">
+                <div class="cropper-controls">
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="cropperRotateLeft()">
+                        <i class="fas fa-undo"></i> Girar ↺
                     </button>
-                    <button type="button" class="toolbar-btn" onclick="resetCorners()" title="Resetar cantos para bordas da imagem">
-                        <i class="fas fa-expand"></i>
-                        <span class="toolbar-label">Resetar</span>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="cropperRotateRight()">
+                        <i class="fas fa-redo"></i> Girar ↻
+                    </button>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="cropperZoomIn()">
+                        <i class="fas fa-search-plus"></i> Zoom +
+                    </button>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="cropperZoomOut()">
+                        <i class="fas fa-search-minus"></i> Zoom -
+                    </button>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="cropperReset()">
+                        <i class="fas fa-sync"></i> Resetar
                     </button>
                 </div>
-                <div class="toolbar-separator"></div>
-                <div class="toolbar-group">
-                    <button type="button" class="toolbar-btn" onclick="cropperRotateLeft()" title="Girar 90° esquerda">
-                        <i class="fas fa-undo"></i>
-                        <span class="toolbar-label">Girar ↺</span>
-                    </button>
-                    <button type="button" class="toolbar-btn" onclick="cropperRotateRight()" title="Girar 90° direita">
-                        <i class="fas fa-redo"></i>
-                        <span class="toolbar-label">Girar ↻</span>
-                    </button>
-                    <button type="button" class="toolbar-btn" onclick="cropperFlipH()" title="Espelhar horizontal">
-                        <i class="fas fa-arrows-alt-h"></i>
-                        <span class="toolbar-label">Espelhar H</span>
-                    </button>
-                    <button type="button" class="toolbar-btn" onclick="cropperFlipV()" title="Espelhar vertical">
-                        <i class="fas fa-arrows-alt-v"></i>
-                        <span class="toolbar-label">Espelhar V</span>
-                    </button>
-                </div>
-                <div class="toolbar-separator"></div>
-                <div class="toolbar-group">
-                    <button type="button" class="toolbar-btn" onclick="cropperZoomIn()" title="Zoom +">
-                        <i class="fas fa-search-plus"></i>
-                        <span class="toolbar-label">Zoom +</span>
-                    </button>
-                    <button type="button" class="toolbar-btn" onclick="cropperZoomOut()" title="Zoom -">
-                        <i class="fas fa-search-minus"></i>
-                        <span class="toolbar-label">Zoom −</span>
-                    </button>
+                <div class="cropper-image-container">
+                    <img id="cropperImage" src="" alt="Imagem para recortar" loading="lazy">
                 </div>
             </div>
-
-            <!-- Canvas area with image + overlay -->
-            <div class="editor-canvas-area" id="scannerCanvasArea">
-                <div class="scanner-image-wrapper" id="scannerImageWrapper">
-                    <img id="cropperImage" src="" alt="Imagem para digitalizar" loading="lazy">
-                    <canvas id="scannerOverlay" class="scanner-overlay"></canvas>
-                </div>
-            </div>
-
-            <!-- Step 1 footer -->
-            <div class="editor-actions">
-                <button type="button" class="btn btn-secondary" onclick="closeCropperModal()">
-                    <i class="fas fa-times"></i> Cancelar
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeCropperModal()">Cancelar</button>
+                <button type="button" class="btn btn-outline" onclick="skipCrop()" title="Usar a imagem original sem cortar">
+                    <i class="fas fa-forward"></i> Usar sem editar
                 </button>
-                <button type="button" class="btn btn-outline" onclick="skipToStep2NoCrop()">
-                    <i class="fas fa-forward"></i> Pular recorte
-                </button>
-                <button type="button" class="btn btn-primary" onclick="applyDetectionAndGoStep2()">
-                    <i class="fas fa-crop-alt"></i> Recortar e Continuar
-                </button>
-            </div>
-        </div>
-
-        <!-- ========== STEP 2: Enhance / Filters ========== -->
-        <div class="scanner-panel" id="scannerStep2" style="display:none; flex-direction:column; flex:1; min-height:0;">
-            <!-- Filter presets -->
-            <div class="filter-selector" id="filterSelector">
-                <button type="button" class="filter-btn active" onclick="applyDocFilter('original')" data-filter="original">
-                    <canvas class="filter-preview" id="filterPreviewOriginal" width="80" height="60"></canvas>
-                    <span>Original</span>
-                </button>
-                <button type="button" class="filter-btn" onclick="applyDocFilter('document')" data-filter="document">
-                    <canvas class="filter-preview" id="filterPreviewDocument" width="80" height="60"></canvas>
-                    <span>Documento</span>
-                </button>
-                <button type="button" class="filter-btn" onclick="applyDocFilter('bw')" data-filter="bw">
-                    <canvas class="filter-preview" id="filterPreviewBw" width="80" height="60"></canvas>
-                    <span>Preto & Branco</span>
-                </button>
-                <button type="button" class="filter-btn" onclick="applyDocFilter('grayscale')" data-filter="grayscale">
-                    <canvas class="filter-preview" id="filterPreviewGrayscale" width="80" height="60"></canvas>
-                    <span>Cinza</span>
-                </button>
-            </div>
-
-            <!-- Filtered image preview -->
-            <div class="editor-canvas-area" id="step2CanvasArea">
-                <canvas id="filterCanvas" class="filter-canvas"></canvas>
-            </div>
-
-            <!-- Adjustments (collapsible) -->
-            <div class="editor-adjustments" id="editorAdjustments">
-                <div class="adjustments-header" onclick="toggleAdjustments()">
-                    <span><i class="fas fa-sliders-h"></i> Ajustes Finos</span>
-                    <i class="fas fa-chevron-down" id="adjustmentsToggleIcon"></i>
-                </div>
-                <div class="adjustments-panel" id="adjustmentsPanel" style="display:none">
-                    <div class="adjustment-row">
-                        <label><i class="fas fa-sun"></i> Brilho</label>
-                        <input type="range" id="adjustBrightness" min="0" max="200" value="100" oninput="applyImageAdjustments()">
-                        <span class="adjustment-value" id="valBrightness">100%</span>
-                    </div>
-                    <div class="adjustment-row">
-                        <label><i class="fas fa-adjust"></i> Contraste</label>
-                        <input type="range" id="adjustContrast" min="0" max="200" value="100" oninput="applyImageAdjustments()">
-                        <span class="adjustment-value" id="valContrast">100%</span>
-                    </div>
-                    <div class="adjustment-row">
-                        <label><i class="fas fa-palette"></i> Saturação</label>
-                        <input type="range" id="adjustSaturation" min="0" max="200" value="100" oninput="applyImageAdjustments()">
-                        <span class="adjustment-value" id="valSaturation">100%</span>
-                    </div>
-                    <div class="adjustment-row">
-                        <label><i class="fas fa-braille"></i> Nitidez</label>
-                        <input type="range" id="adjustSharpness" min="0" max="100" value="0" oninput="applyImageAdjustments()">
-                        <span class="adjustment-value" id="valSharpness">0%</span>
-                    </div>
-                    <button type="button" class="btn-reset-adjustments" onclick="resetAdjustments()">
-                        <i class="fas fa-undo"></i> Resetar ajustes
-                    </button>
-                </div>
-            </div>
-
-            <!-- Step 2 footer -->
-            <div class="editor-actions">
-                <button type="button" class="btn btn-secondary" onclick="goToScanStep(1)">
-                    <i class="fas fa-arrow-left"></i> Voltar
-                </button>
-                <button type="button" class="btn btn-primary" onclick="addPageAndContinue()">
-                    <i class="fas fa-plus"></i> Adicionar Página
-                </button>
-            </div>
-        </div>
-
-        <!-- ========== STEP 3: Review Pages ========== -->
-        <div class="scanner-panel" id="scannerStep3" style="display:none; flex-direction:column; flex:1; min-height:0;">
-            <div class="pages-info">
-                <span id="pagesCount">0 páginas</span>
-                <button type="button" class="btn btn-outline btn-sm" onclick="addMorePages()">
-                    <i class="fas fa-plus"></i> Adicionar mais
-                </button>
-            </div>
-
-            <!-- Pages thumbnail strip -->
-            <div class="pages-queue" id="pagesQueue">
-                <!-- Thumbnails rendered by JS -->
-            </div>
-
-            <!-- Combine options -->
-            <div class="combine-options" id="combineOptions">
-                <label class="combine-label">
-                    <input type="radio" name="combineMode" value="pdf" checked>
-                    <i class="fas fa-file-pdf"></i> Combinar em PDF único
-                </label>
-                <label class="combine-label">
-                    <input type="radio" name="combineMode" value="separate">
-                    <i class="fas fa-images"></i> Manter imagens separadas
-                </label>
-            </div>
-
-            <!-- Step 3 footer -->
-            <div class="editor-actions">
-                <button type="button" class="btn btn-secondary" onclick="closeCropperModal()">
-                    <i class="fas fa-times"></i> Cancelar
-                </button>
-                <button type="button" class="btn btn-primary" onclick="finalizePages()">
-                    <i class="fas fa-check"></i> Finalizar
+                <button type="button" class="btn btn-primary" onclick="applyCrop()">
+                    <i class="fas fa-check"></i> Aplicar corte
                 </button>
             </div>
         </div>
     </div>
-</div>
 
     <!-- Modal for Adding/Editing Income -->
     <div id="incomeModal" class="modal">
@@ -1300,70 +1133,46 @@
     </div>
 
     <!-- Modal: visualizador de PDF inline -->
-<div id="pdfViewerModal" class="modal viewer-modal" style="display:none;">
-    <div class="modal-content viewer-content">
-        <div class="viewer-header">
-            <div class="viewer-title">
-                <i class="fas fa-file-pdf"></i>
-                <span>Nota Fiscal</span>
-                <span id="pdfPageInfo" class="viewer-page-info">Página 1 de 1</span>
-            </div>
-            <div class="viewer-actions">
-                <div class="viewer-zoom-controls">
-                    <button class="viewer-btn" onclick="pdfZoomOut()" title="Diminuir zoom">
-                        <i class="fas fa-search-minus"></i>
+    <div id="pdfViewerModal" class="modal" style="display:none;">
+        <div class="modal-content pdf-viewer-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-file-pdf"></i> Nota Fiscal</h3>
+                <div class="pdf-viewer-actions">
+                    <button class="btn btn-outline btn-sm" onclick="downloadCurrentPDF()" title="Baixar PDF">
+                        <i class="fas fa-download"></i> Baixar
                     </button>
-                    <span id="pdfZoomLevel" class="viewer-zoom-level">100%</span>
-                    <button class="viewer-btn" onclick="pdfZoomIn()" title="Aumentar zoom">
-                        <i class="fas fa-search-plus"></i>
-                    </button>
-                    <button class="viewer-btn" onclick="pdfZoomFit()" title="Ajustar à tela">
-                        <i class="fas fa-expand"></i>
+                    <button class="btn btn-outline btn-sm" onclick="closePdfViewer()" title="Fechar">
+                        <i class="fas fa-times"></i>
                     </button>
                 </div>
-                <div class="viewer-action-separator"></div>
-                <button class="viewer-btn" onclick="downloadCurrentPDF()" title="Baixar PDF">
-                    <i class="fas fa-download"></i>
-                    <span class="viewer-btn-label">Baixar</span>
-                </button>
-                <button class="viewer-btn viewer-btn-close" onclick="closePdfViewer()" title="Fechar">
-                    <i class="fas fa-times"></i>
-                </button>
             </div>
-        </div>
-        <div id="pdfViewerContainer" class="viewer-container">
-            <div id="pdfLoadingMsg" class="viewer-loading">
-                <i class="fas fa-spinner fa-spin fa-2x"></i>
-                <p>Carregando PDF...</p>
+            <div id="pdfViewerContainer" class="pdf-viewer-container">
+                <div id="pdfLoadingMsg" style="text-align:center;padding:40px;">
+                    <i class="fas fa-spinner fa-spin fa-2x"></i>
+                    <p>Carregando PDF...</p>
+                </div>
+                <canvas id="pdfCanvas"></canvas>
+                <div id="pdfNavBar" class="pdf-nav-bar" style="display:none;">
+                    <button onclick="pdfPrevPage()" id="pdfPrevBtn"><i class="fas fa-chevron-left"></i></button>
+                    <span id="pdfPageInfo">Página 1 de 1</span>
+                    <button onclick="pdfNextPage()" id="pdfNextBtn"><i class="fas fa-chevron-right"></i></button>
+                </div>
             </div>
-            <canvas id="pdfCanvas"></canvas>
-        </div>
-        <div id="pdfNavBar" class="viewer-nav-bar" style="display:none;">
-            <button onclick="pdfPrevPage()" id="pdfPrevBtn" class="viewer-nav-btn">
-                <i class="fas fa-chevron-left"></i> Anterior
-            </button>
-            <span id="pdfPageInfoBottom" class="viewer-nav-info">Página 1 de 1</span>
-            <button onclick="pdfNextPage()" id="pdfNextBtn" class="viewer-nav-btn">
-                Próxima <i class="fas fa-chevron-right"></i>
-            </button>
         </div>
     </div>
-</div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <!-- Cropper.js for image cropping -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
     <!-- PDF.js para visualização inline -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script src="config.js?v=1780300000"></script>
-    <script src="jwt-interceptor.js?v=1780300000"></script>
-    <script src="cloud-storage.js?v=1780300000"></script>
-    <script src="auth.js?v=1780300000"></script>
-    <script src="audit.js?v=1780300000"></script>
-    <script src="script.js?v=1780300000"></script>
-    <script src="document-scanner.js?v=1780400000"></script>
-    <script src="settings.js?v=1780300000"></script>
+    <script src="config.js?v=1778520000"></script>
+    <script src="jwt-interceptor.js?v=1778520000"></script>
+    <script src="cloud-storage.js?v=1778520000"></script>
+    <script src="auth.js?v=1778520000"></script>
+    <script src="audit.js?v=1778520000"></script>
+    <script src="script.js?v=1778520000"></script>
+    <script src="settings.js?v=1778520000"></script>
 <script>
 // ===== FUNÇÕES DE AUDITORIA =====
 
@@ -1762,7 +1571,7 @@ document.addEventListener('DOMContentLoaded', function() {
     observer.observe(settingsModal, { attributes: true });
 });
 </script>
-    <script src="sidebar.js?v=1780300000"></script>
-    <script src="redesign-refinements.js?v=1781800000"></script>
+    <script src="sidebar.js?v=1778520000"></script>
+    <script src="redesign-refinements.js?v=1778520000"></script>
 </body>
 </html>

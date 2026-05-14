@@ -24,11 +24,14 @@ const financialData = {
         'Cartão de Crédito', 'Reembolso', 'Conta Corrente', 'Outros'
     ],
     years: [2024, 2025, 2026],
-    // [SEC 14/05/2026] Bloco "users" hardcoded removido.
-    // Usuários reais vêm do MongoDB via /api/auth/login (JWT + bcrypt).
-    // Mantido array vazio apenas para compatibilidade com código legado que possa
-    // iterar sobre financialData.users.
-    users: [],
+    users: [
+        {
+            username: 'admin',
+            password: 'admin', // Em produção, use hash
+            name: 'Administrador',
+            role: 'admin' // admin ou normal
+        }
+    ],
     currentUser: null
 };
 
@@ -42,6 +45,10 @@ financialData.months.forEach((_, index) => {
 // Charts
 let categoryChart = null;
 let monthlyChart = null;
+
+// Paginacao de despesas
+let expensesCurrentPage = 1;
+const EXPENSES_PER_PAGE = 50;
 
 // Receipt files storage
 let currentReceiptFiles = [];
@@ -356,9 +363,114 @@ function renderCurrentMonth() {
 }
 
 // Render Expenses Table
-let expensesCurrentPage=1;const EXPENSES_PER_PAGE=50;
+function renderExpenses() {
+    console.log('=== RENDERIZANDO DESPESAS ===');
+    console.log('financialData.expenses:', financialData.expenses);
 
-function renderExpenses(){console.log("=== RENDERIZANDO DESPESAS ==="),console.log("financialData.expenses:",financialData.expenses);let e=[];Object.keys(financialData.expenses).forEach(t=>{const a=financialData.expenses[t]||[];console.log(`Mês ${t}:`,a.length,"despesas"),a.forEach(a=>{e.push({...a,monthIndex:t,monthName:financialData.months[t]})})}),console.log("Total de despesas encontradas:",e.length);const t=document.getElementById("expensesBody");if(0===e.length)return console.log("Nenhuma despesa para exibir"),void(t.innerHTML='<tr><td colspan="9" style="text-align: center; padding: 40px; color: #64748b;">Nenhuma despesa cadastrada</td></tr>');e=[...e].sort((e,t)=>{const a=new Date(e.date);return new Date(t.date)-a});const a=e.length,n=Math.ceil(a/50);expensesCurrentPage>n&&(expensesCurrentPage=n||1);const o=50*(expensesCurrentPage-1),r=e.slice(o,o+50);t.innerHTML=r.map(e=>{const t=financialData.expenses[e.monthIndex].indexOf(financialData.expenses[e.monthIndex].find(t=>t.date===e.date&&t.description===e.description&&t.amount===e.amount));return`\n        <tr>\n            <td>${formatDate(e.date)}</td>\n            <td>${e.description}</td>\n            <td><span style="padding: 4px 12px; background: #e0e7ff; color: #4338ca; border-radius: 12px; font-size: 12px; font-weight: 600;">${e.category}</span></td>\n            <td>${e.supplier}</td>\n            <td>${formatMoney(e.amount)}</td>\n            <td><span style="padding: 4px 10px; background: #fef3c7; color: #92400e; border-radius: 8px; font-size: 11px; font-weight: 600;">${e.paymentMethod||"N/A"}</span></td>\n            <td>${e.dueDate?formatDate(e.dueDate):"-"}</td>\n            <td style="text-align: center;">\n                ${e.receiptPDF?`<i class="fas fa-file-pdf attachment-icon" onclick="viewReceipt(${e.monthIndex}, ${t})" title="Ver nota fiscal"></i>`:'<i class="fas fa-minus no-attachment"></i>'}\n            </td>\n            <td>\n                <div class="action-buttons">\n                    <button class="btn-edit" onclick="editExpense(${e.monthIndex}, ${t})"><i class="fas fa-edit"></i></button>\n                    <button class="btn-delete" onclick="deleteExpense(${e.monthIndex}, ${t})"><i class="fas fa-trash"></i></button>\n                </div>\n            </td>\n        </tr>\n        `}).join(""),renderExpensesPagination(a,n)}function renderExpensesPagination(e,t){let a=document.getElementById("expensesPagination");if(!a){a=document.createElement("div"),a.id="expensesPagination",a.style.cssText="display:flex;justify-content:space-between;align-items:center;padding:12px 0;gap:10px;flex-wrap:wrap;";const e=document.querySelector(".expenses-section .table-container");e&&e.parentNode.insertBefore(a,e.nextSibling)}if(t<=1)return void(a.innerHTML=`<span style="font-size:13px;color:#64748b;">${e} despesa(s)</span>`);let n="";expensesCurrentPage>1&&(n+=`<button onclick="changeExpensesPage(${expensesCurrentPage-1})" class="btn btn-sm btn-secondary"><i class="fas fa-chevron-left"></i></button>`),n+=`<span style="font-size:13px;color:#475569;font-weight:600;">Pagina ${expensesCurrentPage} de ${t}</span>`,expensesCurrentPage<t&&(n+=`<button onclick="changeExpensesPage(${expensesCurrentPage+1})" class="btn btn-sm btn-secondary"><i class="fas fa-chevron-right"></i></button>`),a.innerHTML=`<span style="font-size:13px;color:#64748b;">${e} despesas (mostrando ${50*(expensesCurrentPage-1)+1}-${Math.min(50*expensesCurrentPage,e)})</span><div style="display:flex;align-items:center;gap:8px;">${n}</div>`}function changeExpensesPage(e){expensesCurrentPage=e,renderExpenses();const t=document.querySelector(".expenses-section");t&&t.scrollIntoView({behavior:"smooth",block:"start"})}
+    // Collect all expenses from all months
+    let allExpenses = [];
+    Object.keys(financialData.expenses).forEach(monthIndex => {
+        const monthExpenses = financialData.expenses[monthIndex] || [];
+        console.log(`Mês ${monthIndex}:`, monthExpenses.length, 'despesas');
+        monthExpenses.forEach(expense => {
+            allExpenses.push({
+                ...expense,
+                monthIndex: monthIndex,
+                monthName: financialData.months[monthIndex]
+            });
+        });
+    });
+
+    console.log('Total de despesas encontradas:', allExpenses.length);
+
+    const tbody = document.getElementById('expensesBody');
+
+    if (allExpenses.length === 0) {
+        console.log('Nenhuma despesa para exibir');
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 40px; color: #64748b;">Nenhuma despesa cadastrada</td></tr>';
+        return;
+    }
+
+    // Sort expenses by date in descending order (most recent first)
+    allExpenses = [...allExpenses].sort((a, b) => {
+        const dateA = new Date(a.date);
+        const dateB = new Date(b.date);
+        return dateB - dateA;
+    });
+
+    // Paginacao
+    const totalItems = allExpenses.length;
+    const totalPages = Math.ceil(totalItems / EXPENSES_PER_PAGE);
+    if (expensesCurrentPage > totalPages) expensesCurrentPage = totalPages || 1;
+    const startIdx = (expensesCurrentPage - 1) * EXPENSES_PER_PAGE;
+    const pageExpenses = allExpenses.slice(startIdx, startIdx + EXPENSES_PER_PAGE);
+
+    tbody.innerHTML = pageExpenses.map((expense) => {
+        const originalIndex = financialData.expenses[expense.monthIndex].indexOf(financialData.expenses[expense.monthIndex].find(e =>
+            e.date === expense.date &&
+            e.description === expense.description &&
+            e.amount === expense.amount
+        ));
+        return `
+        <tr>
+            <td>${formatDate(expense.date)}</td>
+            <td>${expense.description}</td>
+            <td><span style="padding: 4px 12px; background: #e0e7ff; color: #4338ca; border-radius: 12px; font-size: 12px; font-weight: 600;">${expense.category}</span></td>
+            <td>${expense.supplier}</td>
+            <td>${formatMoney(expense.amount)}</td>
+            <td><span style="padding: 4px 10px; background: #fef3c7; color: #92400e; border-radius: 8px; font-size: 11px; font-weight: 600;">${expense.paymentMethod || 'N/A'}</span></td>
+            <td>${expense.dueDate ? formatDate(expense.dueDate) : '-'}</td>
+            <td style="text-align: center;">
+                ${expense.receiptPDF ? `<i class="fas fa-file-pdf attachment-icon" onclick="viewReceipt(${expense.monthIndex}, ${originalIndex})" title="Ver nota fiscal"></i>` : '<i class="fas fa-minus no-attachment"></i>'}
+            </td>
+            <td>
+                <div class="action-buttons">
+                    <button class="btn-edit" onclick="editExpense(${expense.monthIndex}, ${originalIndex})"><i class="fas fa-edit"></i></button>
+                    <button class="btn-delete" onclick="deleteExpense(${expense.monthIndex}, ${originalIndex})"><i class="fas fa-trash"></i></button>
+                </div>
+            </td>
+        </tr>
+        `;
+    }).join('');
+
+    // Renderizar controles de paginacao
+    renderExpensesPagination(totalItems, totalPages);
+}
+
+function renderExpensesPagination(totalItems, totalPages) {
+    let paginationEl = document.getElementById('expensesPagination');
+    if (!paginationEl) {
+        paginationEl = document.createElement('div');
+        paginationEl.id = 'expensesPagination';
+        paginationEl.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:12px 0;gap:10px;flex-wrap:wrap;';
+        const tableContainer = document.querySelector('.expenses-section .table-container');
+        if (tableContainer) tableContainer.parentNode.insertBefore(paginationEl, tableContainer.nextSibling);
+    }
+
+    if (totalPages <= 1) {
+        paginationEl.innerHTML = `<span style="font-size:13px;color:#64748b;">${totalItems} despesa(s)</span>`;
+        return;
+    }
+
+    let buttons = '';
+    if (expensesCurrentPage > 1) {
+        buttons += `<button onclick="changeExpensesPage(${expensesCurrentPage - 1})" class="btn btn-sm btn-secondary"><i class="fas fa-chevron-left"></i></button>`;
+    }
+    buttons += `<span style="font-size:13px;color:#475569;font-weight:600;">Pagina ${expensesCurrentPage} de ${totalPages}</span>`;
+    if (expensesCurrentPage < totalPages) {
+        buttons += `<button onclick="changeExpensesPage(${expensesCurrentPage + 1})" class="btn btn-sm btn-secondary"><i class="fas fa-chevron-right"></i></button>`;
+    }
+
+    paginationEl.innerHTML = `<span style="font-size:13px;color:#64748b;">${totalItems} despesas (mostrando ${(expensesCurrentPage-1)*EXPENSES_PER_PAGE+1}-${Math.min(expensesCurrentPage*EXPENSES_PER_PAGE, totalItems)})</span><div style="display:flex;align-items:center;gap:8px;">${buttons}</div>`;
+}
+
+function changeExpensesPage(page) {
+    expensesCurrentPage = page;
+    renderExpenses();
+    // Scroll para o topo da tabela
+    const table = document.querySelector('.expenses-section');
+    if (table) table.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 
 // Render Income Table
 function renderIncome() {
@@ -699,8 +811,6 @@ async function handleExpenseSubmit(e) {
     const form = e.target;
     const isEditing = form.dataset.editIndex !== undefined;
 
-    try {
-
     // Convert receipt files to PDF
     let receiptPDF = null;
     if (currentReceiptFiles.length > 0) {
@@ -717,6 +827,15 @@ async function handleExpenseSubmit(e) {
         paymentMethod: document.getElementById('expensePaymentMethod').value,
         dueDate: document.getElementById('expenseDueDate').value
     };
+
+    // ===== VALIDAÇÃO DE VALOR (FIX: impedir despesa sem valor) =====
+    const parsedAmount = parseFloat(expense.amount);
+    if (!expense.amount || isNaN(parsedAmount) || parsedAmount <= 0) {
+        showToast('Erro: informe um valor válido para a despesa!', 'error');
+        return;
+    }
+    expense.amount = parsedAmount.toFixed(2);
+    // ===== FIM VALIDAÇÃO =====
 
     // Determine month from expense date
     // Usar extração direta da string para evitar bug de fuso horário
@@ -781,8 +900,37 @@ async function handleExpenseSubmit(e) {
     delete form.dataset.removeReceipt;
     currentReceiptFiles = [];
 
-    console.log('Salvando no localStorage...');
-    saveToLocalStorage();
+    // ===== FIX: Usar operacao atomica ao inves de full replace =====
+    console.log('Salvando via operacao atomica...');
+
+    if (!isEditing && window.CloudStorage && window.CloudStorage.addExpenseAtomic) {
+        // NOVO: Adicionar via API atomica (sem full replace que sobrescreve dados)
+        const year = expense.date ? parseInt(expense.date.substring(0, 4)) : new Date().getFullYear();
+        const atomicSuccess = await window.CloudStorage.addExpenseAtomic(month, year, expense);
+
+        if (atomicSuccess) {
+            console.log('✅ Despesa salva atomicamente no servidor!');
+            // Recarregar dados do servidor para sincronizar estado local
+            const freshData = await window.CloudStorage.reloadFromServer();
+            if (freshData) {
+                const currentUser = financialData.currentUser;
+                Object.assign(financialData, freshData);
+                if (currentUser) financialData.currentUser = currentUser;
+                console.log('✅ Dados recarregados do servidor apos add atomico');
+            }
+            showToast('Despesa salva com sucesso!', 'success');
+        } else {
+            console.warn('⚠️ Falha no add atomico, tentando full sync...');
+            await saveToLocalStorage();
+        }
+    } else {
+        // Edicao ou fallback: usar full sync (menos ideal mas funcional)
+        await saveToLocalStorage();
+    }
+
+    console.log('Renderizando tela...');
+    renderCurrentMonth();
+    console.log('=== FIM SALVAMENTO ===');
 
     // If editing, close modal. If adding new, reset form for next entry
     if (isEditing) {
@@ -790,7 +938,7 @@ async function handleExpenseSubmit(e) {
         closeModals();
     } else {
         console.log('New expense mode: keeping modal open and resetting form');
-        // Reset form for next expense BEFORE rendering (so chart errors don't block reset)
+        // Reset form for next expense
         form.reset();
         document.getElementById('receiptPreview').innerHTML = '';
         currentReceiptFiles = [];
@@ -806,19 +954,6 @@ async function handleExpenseSubmit(e) {
                 console.log('Description field focused');
             }
         }, 100);
-    }
-
-    console.log('Renderizando tela...');
-    try {
-        renderCurrentMonth();
-    } catch (renderErr) {
-        console.warn('Aviso: erro ao renderizar gráficos:', renderErr);
-    }
-    console.log('=== FIM SALVAMENTO ===');
-
-    } catch (error) {
-        console.error('Erro ao salvar despesa:', error);
-        showToast('Erro ao salvar despesa. Tente novamente.', 'error');
     }
 }
 
@@ -873,9 +1008,25 @@ window.addExpenseFromExternal = async function(expenseData) {
             console.log('📝 Auditoria registrada');
         }
 
-        // Salvar no localStorage
-        saveToLocalStorage();
-        console.log('💾 Dados salvos no localStorage');
+        // ===== FIX: Usar operacao atomica =====
+        if (window.CloudStorage && window.CloudStorage.addExpenseAtomic) {
+            const year = expense.date ? parseInt(expense.date.substring(0, 4)) : new Date().getFullYear();
+            const atomicSuccess = await window.CloudStorage.addExpenseAtomic(month, year, expense);
+            if (atomicSuccess) {
+                console.log('✅ Despesa externa salva atomicamente!');
+                const freshData = await window.CloudStorage.reloadFromServer();
+                if (freshData) {
+                    const currentUser = financialData.currentUser;
+                    Object.assign(financialData, freshData);
+                    if (currentUser) financialData.currentUser = currentUser;
+                }
+            } else {
+                await saveToLocalStorage();
+            }
+        } else {
+            saveToLocalStorage();
+        }
+        console.log('💾 Dados salvos');
 
         // Atualizar interface se estiver na tela do Dashboard
         if (typeof renderCurrentMonth === 'function') {
@@ -892,7 +1043,7 @@ window.addExpenseFromExternal = async function(expenseData) {
     }
 };
 
-function handleIncomeSubmit(e) {
+async function handleIncomeSubmit(e) {
     e.preventDefault();
 
     const form = e.target;
@@ -902,6 +1053,15 @@ function handleIncomeSubmit(e) {
         description: document.getElementById('incomeDescription').value,
         amount: document.getElementById('incomeAmount').value
     };
+
+    // ===== VALIDAÇÃO DE VALOR =====
+    const parsedIncomeAmount = parseFloat(income.amount);
+    if (!income.amount || isNaN(parsedIncomeAmount) || parsedIncomeAmount <= 0) {
+        showToast('Erro: informe um valor válido para a entrada!', 'error');
+        return;
+    }
+    income.amount = parsedIncomeAmount.toFixed(2);
+    // ===== FIM VALIDAÇÃO =====
 
     // Determine month from income date
     // Usar extração direta da string para evitar bug de fuso horário
@@ -941,7 +1101,26 @@ function handleIncomeSubmit(e) {
         if (window.registrarAuditoria) registrarAuditoria('dashboard', 'incluir', `Entrada incluída: R$ ${parseFloat(income.amount||0).toFixed(2)} - ${income.description||''}`);
     }
 
-    saveToLocalStorage();
+    // ===== FIX: Usar operacao atomica para receitas =====
+    const isEditingIncome = form.dataset.editIndex !== undefined;
+    if (!isEditingIncome && window.CloudStorage && window.CloudStorage.addIncomeAtomic) {
+        const year = income.date ? parseInt(income.date.substring(0, 4)) : new Date().getFullYear();
+        const atomicSuccess = await window.CloudStorage.addIncomeAtomic(month, year, income);
+        if (atomicSuccess) {
+            console.log('✅ Entrada salva atomicamente no servidor!');
+            const freshData = await window.CloudStorage.reloadFromServer();
+            if (freshData) {
+                const currentUser = financialData.currentUser;
+                Object.assign(financialData, freshData);
+                if (currentUser) financialData.currentUser = currentUser;
+            }
+        } else {
+            await saveToLocalStorage();
+        }
+    } else {
+        await saveToLocalStorage();
+    }
+
     renderCurrentMonth();
     closeModals();
 }
@@ -966,7 +1145,7 @@ function editIncome(monthIndex, index) {
 }
 
 // Delete Functions
-function deleteExpense(monthIndex, index) {
+async function deleteExpense(monthIndex, index) {
     if (!perm('dashboard', 'excluir')) {
         alert('Você não tem permissão para excluir despesas.');
         return;
@@ -975,17 +1154,40 @@ function deleteExpense(monthIndex, index) {
         // Salvar referência antes de deletar para auditoria
         const deletedExpense = financialData.expenses[monthIndex][index];
 
-        financialData.expenses[monthIndex].splice(index, 1);
-        saveToLocalStorage();
+        // ===== FIX: Usar delete atomico + reload do servidor =====
+        if (window.CloudStorage && window.CloudStorage.deleteExpenseAtomic) {
+            const expDate = deletedExpense && deletedExpense.date;
+            const year = expDate ? parseInt(expDate.substring(0, 4)) : new Date().getFullYear();
+            const atomicSuccess = await window.CloudStorage.deleteExpenseAtomic(monthIndex, year, index);
+
+            if (atomicSuccess) {
+                console.log('✅ Despesa deletada atomicamente no servidor!');
+                // Recarregar dados do servidor
+                const freshData = await window.CloudStorage.reloadFromServer();
+                if (freshData) {
+                    const currentUser = financialData.currentUser;
+                    Object.assign(financialData, freshData);
+                    if (currentUser) financialData.currentUser = currentUser;
+                }
+            } else {
+                // Fallback: delete local + full sync
+                financialData.expenses[monthIndex].splice(index, 1);
+                await saveToLocalStorage();
+            }
+        } else {
+            financialData.expenses[monthIndex].splice(index, 1);
+            saveToLocalStorage();
+        }
+
         renderCurrentMonth();
         showToast('Despesa excluída com sucesso!', 'success');
 
         // Registrar auditoria
-        if (window.registrarAuditoria && deletedExpense) registrarAuditoria('dashboard', 'excluir', `Despesa excluída: R$ ${parseFloat(deletedExpense.amount||0).toFixed(2)} em ${deletedExpense.category||'-'} (${deletedExpense.description||''})`);
+        if (window.registrarAuditoria && deletedExpense) registrarAuditoria('dashboard', 'excluir', `Despesa excluída: R\$ ${parseFloat(deletedExpense.amount||0).toFixed(2)} em ${deletedExpense.category||'-'} (${deletedExpense.description||''})`);
     }
 }
 
-function deleteIncome(monthIndex, index) {
+async function deleteIncome(monthIndex, index) {
     if (!perm('dashboard', 'excluir')) {
         alert('Você não tem permissão para excluir receitas.');
         return;
@@ -994,13 +1196,33 @@ function deleteIncome(monthIndex, index) {
         // Salvar referência antes de deletar para auditoria
         const deletedIncome = financialData.income[monthIndex][index];
 
-        financialData.income[monthIndex].splice(index, 1);
-        saveToLocalStorage();
+        // ===== FIX: Usar delete atomico para receitas =====
+        if (window.CloudStorage && window.CloudStorage.deleteIncomeAtomic) {
+            const incDate = deletedIncome && deletedIncome.date;
+            const year = incDate ? parseInt(incDate.substring(0, 4)) : new Date().getFullYear();
+            const atomicSuccess = await window.CloudStorage.deleteIncomeAtomic(monthIndex, year, index);
+            if (atomicSuccess) {
+                console.log('✅ Entrada deletada atomicamente no servidor!');
+                const freshData = await window.CloudStorage.reloadFromServer();
+                if (freshData) {
+                    const currentUser = financialData.currentUser;
+                    Object.assign(financialData, freshData);
+                    if (currentUser) financialData.currentUser = currentUser;
+                }
+            } else {
+                financialData.income[monthIndex].splice(index, 1);
+                await saveToLocalStorage();
+            }
+        } else {
+            financialData.income[monthIndex].splice(index, 1);
+            saveToLocalStorage();
+        }
+
         renderCurrentMonth();
         showToast('Entrada excluída com sucesso!', 'success');
 
         // Registrar auditoria
-        if (window.registrarAuditoria && deletedIncome) registrarAuditoria('dashboard', 'excluir', `Entrada excluída: R$ ${parseFloat(deletedIncome.amount||0).toFixed(2)} - ${deletedIncome.description||''}`);
+        if (window.registrarAuditoria && deletedIncome) registrarAuditoria('dashboard', 'excluir', `Entrada excluída: R\$ ${parseFloat(deletedIncome.amount||0).toFixed(2)} - ${deletedIncome.description||''}`);
     }
 }
 
@@ -1022,6 +1244,10 @@ function saveNotes() {
 
 // Charts
 function initializeCharts() {
+    // Destruir instâncias anteriores para evitar "Canvas is already in use"
+    if (categoryChart) { categoryChart.destroy(); categoryChart = null; }
+    if (monthlyChart) { monthlyChart.destroy(); monthlyChart = null; }
+
     // Category Chart
     const categoryCtx = document.getElementById('categoryChart').getContext('2d');
     categoryChart = new Chart(categoryCtx, {
@@ -1131,11 +1357,9 @@ function updateMonthlyChart() {
         expenseData.push(totalExpense);
     });
 
-    if (monthlyChart.data && monthlyChart.data.datasets && monthlyChart.data.datasets.length >= 2) {
-        monthlyChart.data.datasets[0].data = incomeData;
-        monthlyChart.data.datasets[1].data = expenseData;
-        monthlyChart.update();
-    }
+    monthlyChart.data.datasets[0].data = incomeData;
+    monthlyChart.data.datasets[1].data = expenseData;
+    monthlyChart.update();
 }
 
 // Update charts with filtered data
@@ -1344,46 +1568,47 @@ function showToast(message, type = 'success') {
     toast.innerHTML = `
         <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
         <span>${message}</span>
+        <button class="toast-close" onclick="this.parentElement.remove()" title="Fechar">&times;</button>
     `;
 
     document.body.appendChild(toast);
 
     setTimeout(() => {
-        toast.remove();
-    }, 3000);
+        if (toast.parentElement) toast.remove();
+    }, 5000);
 }
 
 // Receipt Upload Functions
-// [scanner-v2] function handleReceiptUpload(event) {
-// [scanner-v2]     const files = Array.from(event.target.files);
-// [scanner-v2]     if (files.length === 0) return;
-// [scanner-v2] 
-// [scanner-v2]     // Resetar input para permitir reselecionar o mesmo arquivo depois
-// [scanner-v2]     event.target.value = '';
-// [scanner-v2] 
-// [scanner-v2]     files.forEach(file => {
-// [scanner-v2]         if (file.type === 'application/pdf') {
-// [scanner-v2]             // PDF entra direto sem edição
-// [scanner-v2]             currentReceiptFiles.push(file);
-// [scanner-v2]             displayReceiptPreview();
-// [scanner-v2]         } else if (file.type.startsWith('image/')) {
-// [scanner-v2]             // Imagens entram na fila do cropper — processadas uma a uma
-// [scanner-v2]             cropperQueue.push(file);
-// [scanner-v2]         }
-// [scanner-v2]     });
-// [scanner-v2] 
-// [scanner-v2]     // Abrir o cropper para o primeiro da fila (se não há cropper aberto)
-// [scanner-v2]     processNextInCropperQueue();
-// [scanner-v2] }
+function handleReceiptUpload(event) {
+    const files = Array.from(event.target.files);
+    if (files.length === 0) return;
 
-// [scanner-v2] function processNextInCropperQueue() {
-// [scanner-v2]     if (cropperQueue.length === 0) return;
-// [scanner-v2]     // Só abre se o cropper não estiver aberto
-// [scanner-v2]     const modal = document.getElementById('cropperModal');
-// [scanner-v2]     if (modal && (modal.style.display === 'flex' || modal.style.display === 'block')) return;
-// [scanner-v2]     const nextFile = cropperQueue.shift();
-// [scanner-v2]     openImageCropper(nextFile);
-// [scanner-v2] }
+    // Resetar input para permitir reselecionar o mesmo arquivo depois
+    event.target.value = '';
+
+    files.forEach(file => {
+        if (file.type === 'application/pdf') {
+            // PDF entra direto sem edição
+            currentReceiptFiles.push(file);
+            displayReceiptPreview();
+        } else if (file.type.startsWith('image/')) {
+            // Imagens entram na fila do cropper — processadas uma a uma
+            cropperQueue.push(file);
+        }
+    });
+
+    // Abrir o cropper para o primeiro da fila (se não há cropper aberto)
+    processNextInCropperQueue();
+}
+
+function processNextInCropperQueue() {
+    if (cropperQueue.length === 0) return;
+    // Só abre se o cropper não estiver aberto
+    const modal = document.getElementById('cropperModal');
+    if (modal && modal.style.display === 'block') return;
+    const nextFile = cropperQueue.shift();
+    openImageCropper(nextFile);
+}
 
 function captureReceipt() {
     const input = document.createElement('input');
@@ -1399,46 +1624,53 @@ function captureReceipt() {
     input.click();
 }
 
-// [scanner-v2] function displayReceiptPreview() {
-// [scanner-v2]     const preview = document.getElementById('receiptPreview');
-// [scanner-v2]     preview.innerHTML = '';
-// [scanner-v2] 
-// [scanner-v2]     currentReceiptFiles.forEach((file, index) => {
-// [scanner-v2]         const item = document.createElement('div');
-// [scanner-v2]         item.className = 'receipt-preview-item';
-// [scanner-v2] 
-// [scanner-v2]         if (file.type.startsWith('image/')) {
-// [scanner-v2]             const img = document.createElement('img');
-// [scanner-v2]             img.src = URL.createObjectURL(file);
-// [scanner-v2]             item.appendChild(img);
-// [scanner-v2] 
-// [scanner-v2]             // Add edit button for images
-// [scanner-v2]             const editBtn = document.createElement('button');
-// [scanner-v2]             editBtn.className = 'edit-receipt';
-// [scanner-v2]             editBtn.innerHTML = '<i class="fas fa-crop-alt"></i>';
-// [scanner-v2]             editBtn.title = 'Editar / Cortar imagem';
-// [scanner-v2]             editBtn.setAttribute('aria-label', 'Editar e cortar imagem');
-// [scanner-v2]             editBtn.onclick = (e) => {
-// [scanner-v2]                 e.stopPropagation();
-// [scanner-v2]                 editReceiptImage(index);
-// [scanner-v2]             };
-// [scanner-v2]             item.appendChild(editBtn);
-// [scanner-v2]         } else {
-// [scanner-v2]             const pdfIcon = document.createElement('div');
-// [scanner-v2]             pdfIcon.className = 'pdf-icon';
-// [scanner-v2]             pdfIcon.innerHTML = '<i class="fas fa-file-pdf"></i>';
-// [scanner-v2]             item.appendChild(pdfIcon);
-// [scanner-v2]         }
-// [scanner-v2] 
-// [scanner-v2]         const removeBtn = document.createElement('button');
-// [scanner-v2]         removeBtn.className = 'remove-receipt';
-// [scanner-v2]         removeBtn.innerHTML = '×';
-// [scanner-v2]         removeBtn.onclick = () => removeReceipt(index);
-// [scanner-v2]         item.appendChild(removeBtn);
-// [scanner-v2] 
-// [scanner-v2]         preview.appendChild(item);
-// [scanner-v2]     });
-// [scanner-v2] }
+function displayReceiptPreview() {
+    const preview = document.getElementById('receiptPreview');
+    // Revogar blob URLs existentes para evitar memory leaks
+    preview.querySelectorAll('img[src^="blob:"]').forEach(img => {
+        URL.revokeObjectURL(img.src);
+    });
+    preview.innerHTML = '';
+
+    currentReceiptFiles.forEach((file, index) => {
+        const item = document.createElement('div');
+        item.className = 'receipt-preview-item';
+
+        if (file.type.startsWith('image/')) {
+            const img = document.createElement('img');
+            img.loading = 'lazy'; // 4.4: Lazy loading
+            const blobUrl = URL.createObjectURL(file);
+            img.src = blobUrl;
+            img.onload = () => URL.revokeObjectURL(blobUrl); // Revogar após carregar
+            item.appendChild(img);
+
+            // Add edit button for images
+            const editBtn = document.createElement('button');
+            editBtn.className = 'edit-receipt';
+            editBtn.innerHTML = '<i class="fas fa-crop-alt"></i>';
+            editBtn.title = 'Editar / Cortar imagem';
+            editBtn.setAttribute('aria-label', 'Editar e cortar imagem');
+            editBtn.onclick = (e) => {
+                e.stopPropagation();
+                editReceiptImage(index);
+            };
+            item.appendChild(editBtn);
+        } else {
+            const pdfIcon = document.createElement('div');
+            pdfIcon.className = 'pdf-icon';
+            pdfIcon.innerHTML = '<i class="fas fa-file-pdf"></i>';
+            item.appendChild(pdfIcon);
+        }
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'remove-receipt';
+        removeBtn.innerHTML = '×';
+        removeBtn.onclick = () => removeReceipt(index);
+        item.appendChild(removeBtn);
+
+        preview.appendChild(item);
+    });
+}
 
 function removeReceipt(index) {
     currentReceiptFiles.splice(index, 1);
@@ -1676,14 +1908,25 @@ async function openPdfViewer(url) {
     const loading = document.getElementById('pdfLoadingMsg');
     const navBar = document.getElementById('pdfNavBar');
 
+    // Destruir PDF anterior se existir (evita erro ao abrir em sequencia)
+    if (_pdfDoc) {
+        try { _pdfDoc.destroy(); } catch(e) { console.warn('Aviso ao destruir PDF anterior:', e.message); }
+        _pdfDoc = null;
+    }
+    // Limpar canvas anterior
+    if (canvas) {
+        var ctx = canvas.getContext('2d');
+        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
     // Mostrar modal
     modal.style.display = 'flex';
     loading.style.display = 'block';
+    loading.innerHTML = '<i class="fas fa-spinner fa-spin fa-2x"></i><p>Carregando PDF...</p>';
     canvas.style.display = 'none';
     navBar.style.display = 'none';
     _pdfCurrentUrl = url;
     _pdfPage = 1;
-    _pdfZoom = 1;
 
     try {
         // Configurar PDF.js worker
@@ -1729,8 +1972,26 @@ async function openPdfViewer(url) {
 
 async function renderPdfPage(pageNum) {
     if (!_pdfDoc) return;
-    _pdfPage = pageNum;
-    await renderPdfPageWithZoom();
+    const canvas = document.getElementById('pdfCanvas');
+    const ctx = canvas.getContext('2d');
+    const page = await _pdfDoc.getPage(pageNum);
+
+    // Escalar para a largura do container
+    const container = document.getElementById('pdfViewerContainer');
+    const containerW = container.clientWidth - 20;
+    const viewport = page.getViewport({ scale: 1 });
+    const scale = Math.min(containerW / viewport.width, 2);
+    const scaledViewport = page.getViewport({ scale });
+
+    canvas.width = scaledViewport.width;
+    canvas.height = scaledViewport.height;
+
+    await page.render({ canvasContext: ctx, viewport: scaledViewport }).promise;
+
+    document.getElementById('pdfPageInfo').textContent =
+        `Página ${pageNum} de ${_pdfTotal}`;
+    document.getElementById('pdfPrevBtn').disabled = pageNum <= 1;
+    document.getElementById('pdfNextBtn').disabled = pageNum >= _pdfTotal;
 }
 
 async function pdfPrevPage() {
@@ -1743,6 +2004,9 @@ async function pdfNextPage() {
 
 function closePdfViewer() {
     document.getElementById('pdfViewerModal').style.display = 'none';
+    if (_pdfDoc) {
+        try { _pdfDoc.destroy(); } catch(e) { console.warn('Aviso ao destruir PDF:', e.message); }
+    }
     _pdfDoc = null;
     _pdfCurrentUrl = null;
     const canvas = document.getElementById('pdfCanvas');
@@ -1769,462 +2033,176 @@ function downloadCurrentPDF() {
 }
 
 // Image Cropper Functions
-// [scanner-v2] function openImageCropper(file, editIndex = null) {
-// [scanner-v2]     const modal = document.getElementById('cropperModal');
-// [scanner-v2]     const image = document.getElementById('cropperImage');
-// [scanner-v2] 
-// [scanner-v2]     // Store the file temporarily
-// [scanner-v2]     currentCropperFileIndex = editIndex !== null ? editIndex : file;
-// [scanner-v2]     isEditingExistingReceipt = editIndex !== null;
-// [scanner-v2] 
-// [scanner-v2]     // Atualizar badge de fila
-// [scanner-v2]     const badge = document.getElementById('cropperQueueBadge');
-// [scanner-v2]     if (badge) {
-// [scanner-v2]         const remaining = cropperQueue.length; // itens ainda na fila (não conta o atual)
-// [scanner-v2]         if (remaining > 0) {
-// [scanner-v2]             badge.textContent = `(mais ${remaining} imagem${remaining > 1 ? 'ns' : ''} na fila)`;
-// [scanner-v2]             badge.style.display = 'inline';
-// [scanner-v2]         } else {
-// [scanner-v2]             badge.style.display = 'none';
-// [scanner-v2]         }
-// [scanner-v2]     }
-// [scanner-v2] 
-// [scanner-v2]     // Read file and display in cropper
-// [scanner-v2]     const reader = new FileReader();
-// [scanner-v2]     reader.onload = function(e) {
-// [scanner-v2]         image.src = e.target.result;
-// [scanner-v2]         modal.style.display = 'flex';
-// [scanner-v2] 
-// [scanner-v2]         // Destroy previous cropper instance if exists
-// [scanner-v2]         if (cropperInstance) {
-// [scanner-v2]             cropperInstance.destroy();
-// [scanner-v2]         }
-// [scanner-v2] 
-// [scanner-v2]         // Initialize Cropper.js
-// [scanner-v2]         cropperInstance = new Cropper(image, {
-// [scanner-v2]             viewMode: 1,
-// [scanner-v2]             dragMode: 'move',
-// [scanner-v2]             aspectRatio: NaN, // Free aspect ratio
-// [scanner-v2]             autoCropArea: 1,
-// [scanner-v2]             restore: false,
-// [scanner-v2]             guides: true,
-// [scanner-v2]             center: true,
-// [scanner-v2]             highlight: true,
-// [scanner-v2]             cropBoxMovable: true,
-// [scanner-v2]             cropBoxResizable: true,
-// [scanner-v2]             toggleDragModeOnDblclick: false,
-// [scanner-v2]             responsive: true,
-// [scanner-v2]             checkOrientation: true,
-// [scanner-v2]             minContainerWidth: 200,
-// [scanner-v2]             minContainerHeight: 200,
-// [scanner-v2]         });
-// [scanner-v2]         // Reset editor state for new image
-// [scanner-v2]         _flipH = 1;
-// [scanner-v2]         _flipV = 1;
-// [scanner-v2]         if (typeof resetAdjustments === 'function') resetAdjustments();
-// [scanner-v2]         var arSelect = document.getElementById('cropperAspectRatio');
-// [scanner-v2]         if (arSelect) arSelect.value = 'free';
-// [scanner-v2]         // Reset editor state for new image
-// [scanner-v2]         _flipH = 1;
-// [scanner-v2]         _flipV = 1;
-// [scanner-v2]         if (typeof resetAdjustments === 'function') resetAdjustments();
-// [scanner-v2]         var arSelect = document.getElementById('cropperAspectRatio');
-// [scanner-v2]         if (arSelect) arSelect.value = 'free';
-// [scanner-v2]     };
-// [scanner-v2]     reader.readAsDataURL(file);
-// [scanner-v2] }
+function openImageCropper(file, editIndex = null) {
+    const modal = document.getElementById('cropperModal');
+    const image = document.getElementById('cropperImage');
 
-// [scanner-v2] function editReceiptImage(index) {
-// [scanner-v2]     const file = currentReceiptFiles[index];
-// [scanner-v2]     if (file && file.type.startsWith('image/')) {
-// [scanner-v2]         openImageCropper(file, index);
-// [scanner-v2]     }
-// [scanner-v2] }
+    // Store the file temporarily
+    currentCropperFileIndex = editIndex !== null ? editIndex : file;
+    isEditingExistingReceipt = editIndex !== null;
 
-// [scanner-v2] function closeCropperModal() {
-// [scanner-v2]     const modal = document.getElementById('cropperModal');
-// [scanner-v2]     modal.style.display = 'none';
-// [scanner-v2] 
-// [scanner-v2]     if (cropperInstance) {
-// [scanner-v2]         cropperInstance.destroy();
-// [scanner-v2]         cropperInstance = null;
-// [scanner-v2]     }
-// [scanner-v2] 
-// [scanner-v2]     currentCropperFileIndex = null;
-// [scanner-v2]     isEditingExistingReceipt = false;
-// [scanner-v2] 
-// [scanner-v2]     // Processar próxima imagem da fila (se houver)
-// [scanner-v2]     processNextInCropperQueue();
-// [scanner-v2] }
+    // Atualizar badge de fila
+    const badge = document.getElementById('cropperQueueBadge');
+    if (badge) {
+        const remaining = cropperQueue.length; // itens ainda na fila (não conta o atual)
+        if (remaining > 0) {
+            badge.textContent = `(mais ${remaining} imagem${remaining > 1 ? 'ns' : ''} na fila)`;
+            badge.style.display = 'inline';
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+
+    // Read file and display in cropper
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        image.src = e.target.result;
+        modal.style.display = 'flex';
+
+        // Destroy previous cropper instance if exists
+        if (cropperInstance) {
+            cropperInstance.destroy();
+        }
+
+        // Initialize Cropper.js
+        cropperInstance = new Cropper(image, {
+            viewMode: 1,
+            dragMode: 'move',
+            aspectRatio: NaN, // Free aspect ratio
+            autoCropArea: 1,
+            restore: false,
+            guides: true,
+            center: true,
+            highlight: true,
+            cropBoxMovable: true,
+            cropBoxResizable: true,
+            toggleDragModeOnDblclick: false,
+            responsive: true,
+            checkOrientation: true,
+            minContainerWidth: 200,
+            minContainerHeight: 200,
+        });
+    };
+    reader.readAsDataURL(file);
+}
+
+function editReceiptImage(index) {
+    const file = currentReceiptFiles[index];
+    if (file && file.type.startsWith('image/')) {
+        openImageCropper(file, index);
+    }
+}
+
+function closeCropperModal() {
+    const modal = document.getElementById('cropperModal');
+    modal.style.display = 'none';
+
+    if (cropperInstance) {
+        cropperInstance.destroy();
+        cropperInstance = null;
+    }
+
+    currentCropperFileIndex = null;
+    isEditingExistingReceipt = false;
+
+    // Processar próxima imagem da fila (se houver)
+    processNextInCropperQueue();
+}
 
 // Usar imagem original sem aplicar corte
-// [scanner-v2] function skipCrop() {
-// [scanner-v2]     if (!cropperInstance) return;
-// [scanner-v2] 
-// [scanner-v2]     // Se for imagem nova (não edição), adicionar o arquivo original sem modificação
-// [scanner-v2]     if (!isEditingExistingReceipt && currentCropperFileIndex instanceof File) {
-// [scanner-v2]         currentReceiptFiles.push(currentCropperFileIndex);
-// [scanner-v2]         displayReceiptPreview();
-// [scanner-v2]         showToast('Imagem adicionada sem edição.', 'success');
-// [scanner-v2]     }
-// [scanner-v2] 
-// [scanner-v2]     closeCropperModal();
-// [scanner-v2] }
+function skipCrop() {
+    if (!cropperInstance) return;
 
-// [scanner-v2] function cropperRotateLeft() {
-// [scanner-v2]     if (cropperInstance) {
-// [scanner-v2]         cropperInstance.rotate(-90);
-// [scanner-v2]     }
-// [scanner-v2] }
-
-// [scanner-v2] function cropperRotateRight() {
-// [scanner-v2]     if (cropperInstance) {
-// [scanner-v2]         cropperInstance.rotate(90);
-// [scanner-v2]     }
-// [scanner-v2] }
-
-// [scanner-v2] function cropperZoomIn() {
-// [scanner-v2]     if (cropperInstance) {
-// [scanner-v2]         cropperInstance.zoom(0.1);
-// [scanner-v2]     }
-// [scanner-v2] }
-
-// [scanner-v2] function cropperZoomOut() {
-// [scanner-v2]     if (cropperInstance) {
-// [scanner-v2]         cropperInstance.zoom(-0.1);
-// [scanner-v2]     }
-// [scanner-v2] }
-
-// [scanner-v2] function cropperReset() {
-// [scanner-v2]     if (cropperInstance) {
-// [scanner-v2]         cropperInstance.reset();
-// [scanner-v2]     }
-// [scanner-v2] }
-
-// [scanner-v2] async function applyCrop() {
-// [scanner-v2]     if (!cropperInstance) return;
-// [scanner-v2] 
-// [scanner-v2]     try {
-// [scanner-v2]         // Get cropped canvas
-// [scanner-v2]         let canvas = cropperInstance.getCroppedCanvas({
-// [scanner-v2]             maxWidth: 1600,
-// [scanner-v2]             maxHeight: 1600,
-// [scanner-v2]             fillColor: '#fff',
-// [scanner-v2]             imageSmoothingEnabled: true,
-// [scanner-v2]             imageSmoothingQuality: 'high',
-// [scanner-v2]         });
-// [scanner-v2] 
-// [scanner-v2]         // Apply image adjustments (brightness, contrast, etc.) if modified
-// [scanner-v2]         if (typeof _adjustments !== 'undefined' && (_adjustments.brightness !== 100 || _adjustments.contrast !== 100 ||
-// [scanner-v2]             _adjustments.saturation !== 100 || _adjustments.sharpness > 0)) {
-// [scanner-v2]             canvas = applyCanvasAdjustments(canvas, _adjustments);
-// [scanner-v2]         }
-// [scanner-v2] 
-// [scanner-v2]         // Convert canvas to blob
-// [scanner-v2]         canvas.toBlob(async (blob) => {
-// [scanner-v2]             if (!blob) {
-// [scanner-v2]                 showToast('Erro ao processar imagem', 'error');
-// [scanner-v2]                 return;
-// [scanner-v2]             }
-// [scanner-v2] 
-// [scanner-v2]             // Create a new file from the cropped image
-// [scanner-v2]             let fileName;
-// [scanner-v2]             if (isEditingExistingReceipt) {
-// [scanner-v2]                 // Keep original file name when editing
-// [scanner-v2]                 const originalFile = currentReceiptFiles[currentCropperFileIndex];
-// [scanner-v2]                 fileName = originalFile.name;
-// [scanner-v2]             } else {
-// [scanner-v2]                 // Add suffix when adding new
-// [scanner-v2]                 const origName = (currentCropperFileIndex && currentCropperFileIndex.name) ? currentCropperFileIndex.name : 'nota_fiscal.jpg';
-// [scanner-v2]                 fileName = origName.replace(/\.[^.]+$/, '_cropped.jpg');
-// [scanner-v2]             }
-// [scanner-v2] 
-// [scanner-v2]             const croppedFile = new File([blob], fileName, { type: 'image/jpeg' });
-// [scanner-v2] 
-// [scanner-v2]             // Add or replace in receipt files
-// [scanner-v2]             if (isEditingExistingReceipt) {
-// [scanner-v2]                 currentReceiptFiles[currentCropperFileIndex] = croppedFile;
-// [scanner-v2]             } else {
-// [scanner-v2]                 currentReceiptFiles.push(croppedFile);
-// [scanner-v2]             }
-// [scanner-v2] 
-// [scanner-v2]             // Close modal
-// [scanner-v2]             closeCropperModal();
-// [scanner-v2] 
-// [scanner-v2]             // Update preview
-// [scanner-v2]             displayReceiptPreview();
-// [scanner-v2] 
-// [scanner-v2]             showToast('Imagem editada com sucesso!', 'success');
-// [scanner-v2]         }, 'image/jpeg', 0.85); // 85% quality
-// [scanner-v2]     } catch (error) {
-// [scanner-v2]         console.error('❌ Erro ao aplicar recorte:', error);
-// [scanner-v2]         showToast('Erro ao processar imagem', 'error');
-// [scanner-v2]     }
-// [scanner-v2] }
-
-// ===== ENHANCED IMAGE EDITOR FUNCTIONS =====
-// Flip state tracking
-// [scanner-v2] var _flipH = 1;
-// [scanner-v2] var _flipV = 1;
-
-// Image adjustment state
-// [scanner-v2] var _adjustments = {
-// [scanner-v2]     brightness: 100,
-// [scanner-v2]     contrast: 100,
-// [scanner-v2]     saturation: 100,
-// [scanner-v2]     sharpness: 0
-// [scanner-v2] };
-
-// PDF zoom state
-var _pdfZoom = 1;
-var _pdfFitScale = 1;
-
-// --- Flip Functions ---
-// [scanner-v2] function cropperFlipH() {
-// [scanner-v2]     if (!cropperInstance) return;
-// [scanner-v2]     _flipH *= -1;
-// [scanner-v2]     cropperInstance.scaleX(_flipH);
-// [scanner-v2] }
-
-// [scanner-v2] function cropperFlipV() {
-// [scanner-v2]     if (!cropperInstance) return;
-// [scanner-v2]     _flipV *= -1;
-// [scanner-v2]     cropperInstance.scaleY(_flipV);
-// [scanner-v2] }
-
-// --- Aspect Ratio ---
-// [scanner-v2] function setCropperAspectRatio(value) {
-// [scanner-v2]     if (!cropperInstance) return;
-// [scanner-v2]     var ratio = NaN;
-// [scanner-v2]     switch(value) {
-// [scanner-v2]         case '4:3': ratio = 4/3; break;
-// [scanner-v2]         case '3:4': ratio = 3/4; break;
-// [scanner-v2]         case '16:9': ratio = 16/9; break;
-// [scanner-v2]         case '1:1': ratio = 1; break;
-// [scanner-v2]         case 'a4': ratio = 210/297; break;
-// [scanner-v2]         default: ratio = NaN;
-// [scanner-v2]     }
-// [scanner-v2]     cropperInstance.setAspectRatio(ratio);
-// [scanner-v2] }
-
-// --- Image Adjustments (CSS Filters) ---
-// [scanner-v2] function applyImageAdjustments() {
-// [scanner-v2]     var b = document.getElementById('adjustBrightness');
-// [scanner-v2]     var c = document.getElementById('adjustContrast');
-// [scanner-v2]     var s = document.getElementById('adjustSaturation');
-// [scanner-v2]     var sh = document.getElementById('adjustSharpness');
-// [scanner-v2] 
-// [scanner-v2]     if (!b || !c || !s || !sh) return;
-// [scanner-v2] 
-// [scanner-v2]     _adjustments.brightness = parseInt(b.value);
-// [scanner-v2]     _adjustments.contrast = parseInt(c.value);
-// [scanner-v2]     _adjustments.saturation = parseInt(s.value);
-// [scanner-v2]     _adjustments.sharpness = parseInt(sh.value);
-// [scanner-v2] 
-// [scanner-v2]     // Update value displays
-// [scanner-v2]     var vb = document.getElementById('valBrightness');
-// [scanner-v2]     var vc = document.getElementById('valContrast');
-// [scanner-v2]     var vs = document.getElementById('valSaturation');
-// [scanner-v2]     var vsh = document.getElementById('valSharpness');
-// [scanner-v2]     if (vb) vb.textContent = _adjustments.brightness + '%';
-// [scanner-v2]     if (vc) vc.textContent = _adjustments.contrast + '%';
-// [scanner-v2]     if (vs) vs.textContent = _adjustments.saturation + '%';
-// [scanner-v2]     if (vsh) vsh.textContent = _adjustments.sharpness + '%';
-// [scanner-v2] 
-// [scanner-v2]     // Apply CSS filters to the cropper canvas/image
-// [scanner-v2]     var container = document.querySelector('.cropper-canvas');
-// [scanner-v2]     if (container) {
-// [scanner-v2]         var filter = 'brightness(' + _adjustments.brightness + '%) contrast(' + _adjustments.contrast + '%) saturate(' + _adjustments.saturation + '%)';
-// [scanner-v2]         container.style.filter = filter;
-// [scanner-v2]     }
-// [scanner-v2] }
-
-// [scanner-v2] function resetAdjustments() {
-// [scanner-v2]     _adjustments = { brightness: 100, contrast: 100, saturation: 100, sharpness: 0 };
-// [scanner-v2] 
-// [scanner-v2]     var b = document.getElementById('adjustBrightness');
-// [scanner-v2]     var c = document.getElementById('adjustContrast');
-// [scanner-v2]     var s = document.getElementById('adjustSaturation');
-// [scanner-v2]     var sh = document.getElementById('adjustSharpness');
-// [scanner-v2] 
-// [scanner-v2]     if (b) b.value = 100;
-// [scanner-v2]     if (c) c.value = 100;
-// [scanner-v2]     if (s) s.value = 100;
-// [scanner-v2]     if (sh) sh.value = 0;
-// [scanner-v2] 
-// [scanner-v2]     applyImageAdjustments();
-// [scanner-v2] 
-// [scanner-v2]     // Clear CSS filter
-// [scanner-v2]     var container = document.querySelector('.cropper-canvas');
-// [scanner-v2]     if (container) container.style.filter = '';
-// [scanner-v2] }
-
-// [scanner-v2] function toggleAdjustments() {
-// [scanner-v2]     var panel = document.getElementById('adjustmentsPanel');
-// [scanner-v2]     var icon = document.getElementById('adjustmentsToggleIcon');
-// [scanner-v2]     if (!panel) return;
-// [scanner-v2] 
-// [scanner-v2]     var isVisible = panel.style.display !== 'none';
-// [scanner-v2]     panel.style.display = isVisible ? 'none' : 'flex';
-// [scanner-v2]     if (icon) {
-// [scanner-v2]         icon.className = isVisible ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
-// [scanner-v2]     }
-// [scanner-v2] }
-
-// --- Auto Enhance ---
-// [scanner-v2] function autoEnhanceImage() {
-// [scanner-v2]     _adjustments = { brightness: 115, contrast: 130, saturation: 80, sharpness: 30 };
-// [scanner-v2] 
-// [scanner-v2]     var b = document.getElementById('adjustBrightness');
-// [scanner-v2]     var c = document.getElementById('adjustContrast');
-// [scanner-v2]     var s = document.getElementById('adjustSaturation');
-// [scanner-v2]     var sh = document.getElementById('adjustSharpness');
-// [scanner-v2] 
-// [scanner-v2]     if (b) b.value = 115;
-// [scanner-v2]     if (c) c.value = 130;
-// [scanner-v2]     if (s) s.value = 80;
-// [scanner-v2]     if (sh) sh.value = 30;
-// [scanner-v2] 
-// [scanner-v2]     applyImageAdjustments();
-// [scanner-v2]     showToast('Ajuste automatico aplicado!', 'success');
-// [scanner-v2] }
-
-// --- PDF Zoom Functions ---
-function _updateZoomDisplay() {
-    var zoomEl = document.getElementById('pdfZoomLevel');
-    if (zoomEl) zoomEl.textContent = Math.round(_pdfZoom * 100) + '%';
-}
-
-function pdfZoomIn() {
-    _pdfZoom = Math.min(_pdfZoom + 0.25, 4);
-    _updateZoomDisplay();
-    renderPdfPageWithZoom();
-}
-
-function pdfZoomOut() {
-    _pdfZoom = Math.max(_pdfZoom - 0.25, 0.25);
-    _updateZoomDisplay();
-    renderPdfPageWithZoom();
-}
-
-function pdfZoomFit() {
-    _pdfZoom = 1;
-    _updateZoomDisplay();
-    renderPdfPageWithZoom();
-}
-
-var _pdfRenderTask = null;
-async function renderPdfPageWithZoom() {
-    if (!_pdfDoc) return;
-
-    // Cancel previous render if still running
-    if (_pdfRenderTask) {
-        try { _pdfRenderTask.cancel(); } catch(e) {}
-        _pdfRenderTask = null;
+    // Se for imagem nova (não edição), adicionar o arquivo original sem modificação
+    if (!isEditingExistingReceipt && currentCropperFileIndex instanceof File) {
+        currentReceiptFiles.push(currentCropperFileIndex);
+        displayReceiptPreview();
+        showToast('Imagem adicionada sem edição.', 'success');
     }
 
-    var canvas = document.getElementById('pdfCanvas');
-    var ctx = canvas.getContext('2d');
-    var page = await _pdfDoc.getPage(_pdfPage);
+    closeCropperModal();
+}
 
-    var container = document.getElementById('pdfViewerContainer');
-    var containerW = container.clientWidth - 40;
-    var viewport = page.getViewport({ scale: 1 });
-    _pdfFitScale = containerW / viewport.width;
-    var scale = _pdfFitScale * _pdfZoom;
-    var scaledViewport = page.getViewport({ scale: scale });
+function cropperRotateLeft() {
+    if (cropperInstance) {
+        cropperInstance.rotate(-90);
+    }
+}
 
-    canvas.width = scaledViewport.width;
-    canvas.height = scaledViewport.height;
+function cropperRotateRight() {
+    if (cropperInstance) {
+        cropperInstance.rotate(90);
+    }
+}
 
-    _pdfRenderTask = page.render({ canvasContext: ctx, viewport: scaledViewport });
+function cropperZoomIn() {
+    if (cropperInstance) {
+        cropperInstance.zoom(0.1);
+    }
+}
+
+function cropperZoomOut() {
+    if (cropperInstance) {
+        cropperInstance.zoom(-0.1);
+    }
+}
+
+function cropperReset() {
+    if (cropperInstance) {
+        cropperInstance.reset();
+    }
+}
+
+async function applyCrop() {
+    if (!cropperInstance) return;
+
     try {
-        await _pdfRenderTask.promise;
-    } catch(e) {
-        if (e && e.name === 'RenderingCancelledException') return;
-        console.warn('PDF render error:', e);
+        // Get cropped canvas
+        const canvas = cropperInstance.getCroppedCanvas({
+            maxWidth: 1600,
+            maxHeight: 1600,
+            fillColor: '#fff',
+            imageSmoothingEnabled: true,
+            imageSmoothingQuality: 'high',
+        });
+
+        // Convert canvas to blob
+        canvas.toBlob(async (blob) => {
+            if (!blob) {
+                showToast('Erro ao processar imagem', 'error');
+                return;
+            }
+
+            // Create a new file from the cropped image
+            let fileName;
+            if (isEditingExistingReceipt) {
+                // Keep original file name when editing
+                const originalFile = currentReceiptFiles[currentCropperFileIndex];
+                fileName = originalFile.name;
+            } else {
+                // Add suffix when adding new
+                fileName = currentCropperFileIndex.name.replace(/\.[^.]+$/, '_cropped.jpg');
+            }
+
+            const croppedFile = new File([blob], fileName, { type: 'image/jpeg' });
+
+            // Add or replace in receipt files
+            if (isEditingExistingReceipt) {
+                currentReceiptFiles[currentCropperFileIndex] = croppedFile;
+            } else {
+                currentReceiptFiles.push(croppedFile);
+            }
+
+            // Close modal
+            closeCropperModal();
+
+            // Update preview
+            displayReceiptPreview();
+
+            showToast('Imagem editada com sucesso!', 'success');
+        }, 'image/jpeg', 0.85); // 85% quality
+    } catch (error) {
+        console.error('❌ Erro ao aplicar recorte:', error);
+        showToast('Erro ao processar imagem', 'error');
     }
-    _pdfRenderTask = null;
-
-    // Update zoom display
-    _updateZoomDisplay();
-
-    // Update page info
-    var pageInfoText = 'Pagina ' + _pdfPage + ' de ' + _pdfTotal;
-    var el1 = document.getElementById('pdfPageInfo');
-    var el2 = document.getElementById('pdfPageInfoBottom');
-    if (el1) el1.textContent = pageInfoText;
-    if (el2) el2.textContent = pageInfoText;
-
-    var prevBtn = document.getElementById('pdfPrevBtn');
-    var nextBtn = document.getElementById('pdfNextBtn');
-    if (prevBtn) prevBtn.disabled = _pdfPage <= 1;
-    if (nextBtn) nextBtn.disabled = _pdfPage >= _pdfTotal;
 }
-
-// ===== CANVAS ADJUSTMENTS (Applied before export) =====
-// [scanner-v2] function applyCanvasAdjustments(sourceCanvas, adj) {
-// [scanner-v2]     var canvas = document.createElement('canvas');
-// [scanner-v2]     canvas.width = sourceCanvas.width;
-// [scanner-v2]     canvas.height = sourceCanvas.height;
-// [scanner-v2]     var ctx = canvas.getContext('2d');
-// [scanner-v2] 
-// [scanner-v2]     var b = adj.brightness / 100;
-// [scanner-v2]     var c = adj.contrast / 100;
-// [scanner-v2]     var s = adj.saturation / 100;
-// [scanner-v2] 
-// [scanner-v2]     // Draw with filter if supported
-// [scanner-v2]     if (typeof ctx.filter !== 'undefined') {
-// [scanner-v2]         ctx.filter = 'brightness(' + b + ') contrast(' + c + ') saturate(' + s + ')';
-// [scanner-v2]         ctx.drawImage(sourceCanvas, 0, 0);
-// [scanner-v2]         ctx.filter = 'none';
-// [scanner-v2]     } else {
-// [scanner-v2]         // Fallback: manual pixel manipulation
-// [scanner-v2]         ctx.drawImage(sourceCanvas, 0, 0);
-// [scanner-v2]         var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-// [scanner-v2]         var data = imageData.data;
-// [scanner-v2] 
-// [scanner-v2]         for (var i = 0; i < data.length; i += 4) {
-// [scanner-v2]             data[i] = Math.min(255, data[i] * b);
-// [scanner-v2]             data[i+1] = Math.min(255, data[i+1] * b);
-// [scanner-v2]             data[i+2] = Math.min(255, data[i+2] * b);
-// [scanner-v2] 
-// [scanner-v2]             var factor = (259 * (c * 255 + 255)) / (255 * (259 - c * 255));
-// [scanner-v2]             data[i] = Math.min(255, Math.max(0, factor * (data[i] - 128) + 128));
-// [scanner-v2]             data[i+1] = Math.min(255, Math.max(0, factor * (data[i+1] - 128) + 128));
-// [scanner-v2]             data[i+2] = Math.min(255, Math.max(0, factor * (data[i+2] - 128) + 128));
-// [scanner-v2]         }
-// [scanner-v2]         ctx.putImageData(imageData, 0, 0);
-// [scanner-v2]     }
-// [scanner-v2] 
-// [scanner-v2]     // Apply sharpness via unsharp mask if > 0
-// [scanner-v2]     if (adj.sharpness > 0) {
-// [scanner-v2]         applyUnsharpMask(ctx, canvas.width, canvas.height, adj.sharpness / 100);
-// [scanner-v2]     }
-// [scanner-v2] 
-// [scanner-v2]     return canvas;
-// [scanner-v2] }
-
-// [scanner-v2] function applyUnsharpMask(ctx, w, h, amount) {
-// [scanner-v2]     if (amount <= 0) return;
-// [scanner-v2]     var imageData = ctx.getImageData(0, 0, w, h);
-// [scanner-v2]     var data = imageData.data;
-// [scanner-v2]     var copy = new Uint8ClampedArray(data);
-// [scanner-v2] 
-// [scanner-v2]     var strength = amount * 2;
-// [scanner-v2]     for (var y = 1; y < h - 1; y++) {
-// [scanner-v2]         for (var x = 1; x < w - 1; x++) {
-// [scanner-v2]             for (var ch = 0; ch < 3; ch++) {
-// [scanner-v2]                 var idx = (y * w + x) * 4 + ch;
-// [scanner-v2]                 var center = copy[idx] * (1 + 4 * strength);
-// [scanner-v2]                 var neighbors = (
-// [scanner-v2]                     copy[((y-1)*w+x)*4+ch] + copy[((y+1)*w+x)*4+ch] +
-// [scanner-v2]                     copy[(y*w+x-1)*4+ch] + copy[(y*w+x+1)*4+ch]
-// [scanner-v2]                 ) * strength;
-// [scanner-v2]                 data[idx] = Math.min(255, Math.max(0, center - neighbors));
-// [scanner-v2]             }
-// [scanner-v2]         }
-// [scanner-v2]     }
-// [scanner-v2]     ctx.putImageData(imageData, 0, 0);
-// [scanner-v2] }
-

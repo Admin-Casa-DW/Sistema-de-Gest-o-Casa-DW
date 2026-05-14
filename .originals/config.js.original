@@ -1,0 +1,33 @@
+// Configuração do Sistema - Casa DW
+// Backend hospedado no VPS KingHost
+
+const CONFIG = {
+    // URL da API - Backend no VPS (casadw.com.br/api)
+    API_URL: "https://casadw.com.br",
+
+    // Sincronização automática
+    AUTO_SYNC: true,
+    SYNC_INTERVAL: 30000, // 30 segundos
+
+    // Indicadores visuais
+    SHOW_SYNC_INDICATOR: true,
+    SHOW_CONNECTION_STATUS: true,
+
+    // Modo online
+    OFFLINE_MODE: false
+};
+
+// Limpar URL personalizada antiga (migração para VPS KingHost)
+// Remove qualquer URL do Render.com ou outro backend antigo
+const oldCustomAPI = localStorage.getItem("custom-api-url");
+if (oldCustomAPI && !oldCustomAPI.includes("casadw.com.br")) {
+    console.log("🔄 Removendo URL de API antiga:", oldCustomAPI);
+    localStorage.removeItem("custom-api-url");
+}
+
+// Exportar configuração
+window.APP_CONFIG = CONFIG;
+
+console.log("⚙️ Configuração carregada:");
+console.log("  API:", CONFIG.API_URL);
+console.log("  Sincronização automática:", CONFIG.AUTO_SYNC ? "Ativada" : "Desativada");

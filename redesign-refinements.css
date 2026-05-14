@@ -406,6 +406,117 @@ body.has-sidebar .reports-container .summary-cards .summary-card:nth-child(3) {
 }
 
 /* =====================================================
+   DASHBOARD - Cross-module widgets (Manutenções + Frota)
+   ===================================================== */
+.dash-cross-widgets {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin: 24px 0;
+}
+.dash-widget-card {
+    background: var(--bg-card, #2a3142);
+    border-radius: 16px;
+    padding: 24px;
+    border: 1px solid var(--border-color, #374151);
+}
+.dash-widget-card h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary, #fff);
+    margin: 0 0 16px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.dash-widget-card h3 i {
+    font-size: 18px;
+}
+.dash-widget-kpis {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
+}
+.dash-widget-kpi {
+    background: rgba(99, 102, 241, 0.1);
+    border-radius: 10px;
+    padding: 12px;
+    text-align: center;
+}
+.dash-widget-kpi.green { background: rgba(16, 185, 129, 0.1); }
+.dash-widget-kpi.orange { background: rgba(245, 158, 11, 0.1); }
+.dash-widget-kpi.red { background: rgba(239, 68, 68, 0.1); }
+.dash-widget-kpi .wk-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary, #fff);
+}
+.dash-widget-kpi.green .wk-value { color: #10b981; }
+.dash-widget-kpi.orange .wk-value { color: #f59e0b; }
+.dash-widget-kpi.red .wk-value { color: #ef4444; }
+.dash-widget-kpi .wk-label {
+    font-size: 10px;
+    color: var(--text-muted, #9ca3af);
+    text-transform: uppercase;
+    margin-top: 4px;
+    letter-spacing: 0.5px;
+}
+.dash-widget-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.dash-widget-list li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin-bottom: 6px;
+    font-size: 13px;
+    color: var(--text-primary, #e2e8f0);
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.05);
+}
+.dash-widget-list li:last-child { margin-bottom: 0; }
+.dash-widget-list .alert-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    flex-shrink: 0;
+}
+.dash-widget-list .alert-icon.red { background: rgba(239,68,68,0.15); color: #ef4444; }
+.dash-widget-list .alert-icon.orange { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.dash-widget-list .alert-icon.green { background: rgba(16,185,129,0.15); color: #10b981; }
+.dash-widget-list .alert-text { flex: 1; }
+.dash-widget-list .alert-text strong { font-weight: 600; }
+.dash-widget-list .alert-text small { display: block; color: var(--text-muted, #9ca3af); font-size: 11px; margin-top: 2px; }
+.dash-widget-empty {
+    text-align: center;
+    padding: 20px;
+    color: var(--text-muted, #9ca3af);
+    font-size: 13px;
+}
+.dash-widget-link {
+    display: block;
+    text-align: center;
+    margin-top: 12px;
+    color: #6366f1;
+    font-size: 13px;
+    text-decoration: none;
+    font-weight: 500;
+}
+.dash-widget-link:hover { text-decoration: underline; }
+@media (max-width: 1024px) {
+    .dash-cross-widgets { grid-template-columns: 1fr; }
+}
+
+/* =====================================================
    RELATÓRIOS - Charts section at bottom
    ===================================================== */
 .reports-charts-row {
@@ -512,10 +623,19 @@ body.has-sidebar .reports-container .summary-cards .summary-card:nth-child(3) {
 }
 
 /* =====================================================
-   RELATÓRIOS - Hide original large chart sections
-   (Keep only the injected #reportsChartsRow)
+   RELATÓRIOS - Style original chart sections (dark theme)
+   Hide injected fake charts row
    ===================================================== */
 body.has-sidebar .reports-container > .chart-container {
+    background: var(--bg-card, #2a3142) !important;
+    border-radius: 16px;
+    border: 1px solid var(--border-color, #374151);
+    box-shadow: none;
+}
+body.has-sidebar .reports-container > .chart-container .chart-title {
+    color: var(--text-primary, #fff);
+}
+body.has-sidebar #reportsChartsRow {
     display: none !important;
 }
 
@@ -565,25 +685,36 @@ body.has-sidebar #tabAgenda #alertsSection {
 /* =====================================================
    FROTA - Hide extra table columns to match mockup
    Mockup shows: PLACA, VEÍCULO, BLINDAGEM, REVISÃO, SEGURO, KM ATUAL, AÇÕES
-   Current: Veículo(1), Ano(2), Placa(3), Chassi(4), Renavam(5),
+   Current headers: Veículo(1), Ano(2), Placa(3), Chassi(4), Renavam(5),
             Próx.Revisão(6), RevisãoKM(7), KM Atual(8), Oficina(9),
             Blindagem(10), Rev.Blind.(11), Seguradora(12), Obs(13), Ações(14)
-   Hide: Ano(2), Chassi(4), Renavam(5), RevisãoKM(7), Oficina(9), Rev.Blind.(11), Obs(13)
+   IMPORTANT: Body <td> order differs from <th> order!
+     Body: ...col13=ActionButtons, col14=Obs
+     Headers: ...col13=Obs, col14=Ações
+   Hide headers: Ano(2), Chassi(4), Renavam(5), RevisãoKM(7), Oficina(9), Rev.Blind.(11), Obs(13)
+   Hide body: Ano(2), Chassi(4), Renavam(5), RevisãoKM(7), Oficina(9), Rev.Blind.(11), Obs(14)
    ===================================================== */
+
+/* Hide header columns that are not in the mockup */
 body.has-sidebar .vehicles-table th:nth-child(2),
-body.has-sidebar .vehicles-table td:nth-child(2),
 body.has-sidebar .vehicles-table th:nth-child(4),
-body.has-sidebar .vehicles-table td:nth-child(4),
 body.has-sidebar .vehicles-table th:nth-child(5),
-body.has-sidebar .vehicles-table td:nth-child(5),
 body.has-sidebar .vehicles-table th:nth-child(7),
-body.has-sidebar .vehicles-table td:nth-child(7),
 body.has-sidebar .vehicles-table th:nth-child(9),
-body.has-sidebar .vehicles-table td:nth-child(9),
 body.has-sidebar .vehicles-table th:nth-child(11),
+body.has-sidebar .vehicles-table th:nth-child(13) {
+    display: none !important;
+}
+
+/* Hide body columns - NOTE: col13 in body = action buttons, col14 = obs text
+   So we hide col14 in body (obs) instead of col13 (action buttons) */
+body.has-sidebar .vehicles-table td:nth-child(2),
+body.has-sidebar .vehicles-table td:nth-child(4),
+body.has-sidebar .vehicles-table td:nth-child(5),
+body.has-sidebar .vehicles-table td:nth-child(7),
+body.has-sidebar .vehicles-table td:nth-child(9),
 body.has-sidebar .vehicles-table td:nth-child(11),
-body.has-sidebar .vehicles-table th:nth-child(13),
-body.has-sidebar .vehicles-table td:nth-child(13) {
+body.has-sidebar .vehicles-table td:nth-child(14) {
     display: none !important;
 }
 
@@ -925,6 +1056,41 @@ body.has-sidebar .manut-tab:hover:not(.active) {
     }
     body.has-sidebar .manut-dashboard {
         grid-template-columns: repeat(2, 1fr) !important;
+    }
+}
+
+/* =====================================================
+   CROPPER MODAL - Larger edit screen for nota fiscal
+   ===================================================== */
+.modal-cropper,
+#cropperModal .modal-content {
+    max-width: 90vw !important;
+    width: 900px !important;
+}
+
+.cropper-image-container,
+#cropperModal .cropper-container {
+    min-height: 60vh !important;
+    max-height: 70vh !important;
+    overflow: hidden !important;
+}
+
+.cropper-image-container img,
+#cropperModal .cropper-container img {
+    max-width: 100% !important;
+    display: block !important;
+}
+
+@media (max-width: 768px) {
+    .modal-cropper,
+    #cropperModal .modal-content {
+        max-width: 98vw !important;
+        width: auto !important;
+    }
+    .cropper-image-container,
+    #cropperModal .cropper-container {
+        min-height: 40vh !important;
+        max-height: 60vh !important;
     }
 }
 

@@ -1,975 +1,113 @@
-// ==============================
-// Manutenções Residenciais - DW Administradora
-// ==============================
+function checkManutPerm(e){return!(window.perm&&!window.perm("manutencoes",e))||(alert("Você não tem permissão para "+e+" em Manutenções."),!1)}function applyManutPermissions(){const e=!window.perm||window.perm("manutencoes","incluir"),t=!window.perm||window.perm("manutencoes","editar"),n=!window.perm||window.perm("manutencoes","excluir"),a=e||t||n;if(["addManutBtn","addMaintenanceBtn","openContractsAddBtn"].forEach(t=>{const n=document.getElementById(t);n&&!e&&(n.style.display="none")}),!document.getElementById("manutPermStyle")){const o=document.createElement("style");o.id="manutPermStyle";let r="";t||(r+=".btn-edit-manut, .edit-maintenance-btn { display:none!important; } "),n||(r+=".btn-delete-manut, .delete-maintenance-btn { display:none!important; } "),e||(r+=".btn-add-manut, #addManutBtn, .add-maintenance-btn { display:none!important; } "),a||(r+='.btn-contract-action[onclick*="edit"], .btn-contract-action[onclick*="delete"] { display:none!important; } '),r&&(o.textContent=r,document.head.appendChild(o))}}const API_URL_MANUT=window.APP_CONFIG?.API_URL||null;let maintenances=[],maintenanceTypes=[],maintenanceAreas=[],calendarDate=new Date,editingId=null,viewingId=null,pendingFiles=[];const DEFAULT_TYPES=["Pintura","Hidráulica","Elétrica","Ar-condicionado","Dedetização","Limpeza","Reforma","Manutenção preventiva","Instalação","Reparo"],DEFAULT_AREAS=["Sala","Cozinha","Banheiro","Quarto","Garagem","Área externa","Piscina","Jardim","Lavanderia","Escritório","Geral"];function formatMoney(e){if(null==e||isNaN(e))return"R$ 0,00";return parseFloat(e).toLocaleString("pt-BR",{style:"currency",currency:"BRL",minimumFractionDigits:2,maximumFractionDigits:2})}function setDefaultDate(){const e=(new Date).toISOString().split("T")[0];document.getElementById("manutDate").value=e}async function loadData(){try{const e=localStorage.getItem("user-id");if(!e||!API_URL_MANUT)return console.warn("⚠️ Sem userId ou API_URL — usando dados locais"),maintenances=JSON.parse(localStorage.getItem("manut_local")||"[]"),maintenanceTypes=JSON.parse(localStorage.getItem("manut_types")||"null")||[...DEFAULT_TYPES],void(maintenanceAreas=JSON.parse(localStorage.getItem("manut_areas")||"null")||[...DEFAULT_AREAS]);const t=await fetch(`${API_URL_MANUT}/api/sync/${e}`);if(!t.ok)throw new Error("Erro na API");const n=await t.json();maintenances=n.maintenance||[],maintenanceTypes=n.maintenanceTypes&&n.maintenanceTypes.length>0?n.maintenanceTypes:[...DEFAULT_TYPES],maintenanceAreas=n.maintenanceAreas&&n.maintenanceAreas.length>0?n.maintenanceAreas:[...DEFAULT_AREAS],console.log(`✅ ${maintenances.length} manutenções, ${maintenanceTypes.length} tipos, ${maintenanceAreas.length} áreas carregados`)}catch(e){console.error("Erro ao carregar:",e),maintenances=[],maintenanceTypes=[...DEFAULT_TYPES],maintenanceAreas=[...DEFAULT_AREAS],showToast("Falha ao carregar dados de manutencoes do servidor. Verifique sua conexao.","error")}}async function saveMaintenances(){return saveToAPI({maintenance:maintenances})}async function saveTypes(){return saveToAPI({maintenanceTypes:maintenanceTypes})}async function saveAreas(){return saveToAPI({maintenanceAreas:maintenanceAreas})}async function saveToAPI(e){try{const t=localStorage.getItem("user-id");if(!t||!API_URL_MANUT)return void 0!==e.maintenance&&localStorage.setItem("manut_local",JSON.stringify(maintenances)),void 0!==e.maintenanceTypes&&localStorage.setItem("manut_types",JSON.stringify(maintenanceTypes)),void 0!==e.maintenanceAreas&&localStorage.setItem("manut_areas",JSON.stringify(maintenanceAreas)),!0;const n=await fetch(`${API_URL_MANUT}/api/sync`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userId:t,...e})});return!!n.ok||(console.error("❌ Erro ao salvar:",n.status),!1)}catch(e){return console.error("❌ Erro ao salvar:",e),!1}}function getEffectiveStatus(e){if("concluida"===e.status)return"concluida";var refDate=e.nextDate||e.date;if(refDate){const t=new Date(refDate+"T12:00:00"),n=new Date;if(n.setHours(0,0,0,0),t<n)return"vencida"}if("em_andamento"===e.status)return"em_andamento";return e.status||"pendente"}function statusLabel(e){return{pendente:"Pendente",em_andamento:"Em Andamento",concluida:"Concluída",vencida:"Vencida"}[e]||e}function updateDashboard(){const e=(new Date).getFullYear();let t=maintenances.length,n=0,a=0,o=0,r=0;maintenances.forEach(t=>{const s=getEffectiveStatus(t);"concluida"===s?a++:"vencida"===s?o++:n++;(t.date?parseInt(t.date.substring(0,4)):null)===e&&t.cost&&(r+=parseFloat(t.cost||0))}),document.getElementById("cardTotal").textContent=t,document.getElementById("cardPending").textContent=n,document.getElementById("cardOverdue").textContent=o,document.getElementById("cardDone").textContent=a,document.getElementById("cardCost").textContent=formatMoney(r)}function getAlertDate(e){return e.nextDate?e.nextDate:e.date}function buildAlertLists(){const e=new Date;e.setHours(0,0,0,0);const t=new Date(e);t.setDate(t.getDate()+7);const n=[],a=[];return maintenances.forEach(o=>{if("concluida"===o.status)return;const r=getAlertDate(o);if(!r)return;const s=new Date(r+"T00:00:00");if(s<e)n.push({m:o,refDate:s});else if(s<=t){const t=Math.floor((s-e)/864e5);a.push({m:o,refDate:s,days:t})}}),n.sort((e,t)=>e.refDate-t.refDate),a.sort((e,t)=>e.refDate-t.refDate),{overdue:n,soon:a}}function renderAlerts(){const{overdue:e,soon:t}=buildAlertLists(),n=e.length+t.length,a=document.getElementById("alertsSection"),o=document.getElementById("alertsList");if(updateAlertBadge(n),0===n)return void(a.style.display="none");a.style.display="block";let r="";e.length>0&&(r+=`<div class="alert-group-title alert-group-overdue">\n            <i class="fas fa-exclamation-triangle"></i>\n            Vencidas (${e.length})\n        </div>`,e.forEach(({m:e,refDate:t})=>{const n=Math.floor(((new Date).setHours(0,0,0,0)-t)/864e5),a=0===n?"Hoje":`${n} dia(s) em atraso`;r+=`\n                <div class="alert-item alert-overdue">\n                    <div class="alert-icon overdue"><i class="fas fa-exclamation-triangle"></i></div>\n                    <div class="alert-info">\n                        <strong>${e.type} — ${e.area}</strong>\n                        <small>\n                            <span class="alert-tag overdue-tag">VENCIDA</span>\n                            ${a} · Prevista para ${formatDate(t.toISOString().split("T")[0])}\n                            ${e.supplier?" · "+e.supplier:""}\n                        </small>\n                    </div>\n                    <div class="alert-actions">\n                        <button class="btn-alert-action" onclick="openEditModal('${e.id}')" title="Editar">\n                            <i class="fas fa-edit"></i>\n                        </button>\n                        <button class="btn-alert-action" onclick="openViewModal('${e.id}')" title="Ver detalhes">\n                            <i class="fas fa-eye"></i>\n                        </button>\n                    </div>\n                </div>`})),t.length>0&&(r+=`<div class="alert-group-title alert-group-soon">\n            <i class="fas fa-clock"></i>\n            Próximas — 7 dias (${t.length})\n        </div>`,t.forEach(({m:e,days:t,refDate:n})=>{const a=0===t?"Hoje":1===t?"Amanhã":`Em ${t} dias`;r+=`\n                <div class="alert-item alert-soon ${t<=2?"soon-urgent":"soon-normal"}">\n                    <div class="alert-icon soon"><i class="fas fa-clock"></i></div>\n                    <div class="alert-info">\n                        <strong>${e.type} — ${e.area}</strong>\n                        <small>\n                            <span class="alert-tag soon-tag">${a.toUpperCase()}</span>\n                            Prevista para ${formatDate(n.toISOString().split("T")[0])}\n                            ${e.supplier?" · "+e.supplier:""}\n                            ${"sim"===e.recurring?" · ↻ Recorrente":""}\n                        </small>\n                    </div>\n                    <div class="alert-actions">\n                        <button class="btn-alert-action" onclick="openEditModal('${e.id}')" title="Editar">\n                            <i class="fas fa-edit"></i>\n                        </button>\n                        <button class="btn-alert-action" onclick="openViewModal('${e.id}')" title="Ver detalhes">\n                            <i class="fas fa-eye"></i>\n                        </button>\n                    </div>\n                </div>`})),o.innerHTML=r,showAlertBanner(e.length,t.length)}function updateAlertBadge(e){let t=document.getElementById("alertTabBadge");t&&(0===e?t.style.display="none":(t.textContent=e,t.style.display="inline-flex"),updateGlobalNotificationBadge(e))}function updateGlobalNotificationBadge(e){const t=document.getElementById("globalNotificationBadge"),n=document.getElementById("globalNotificationCount"),a=document.getElementById("globalNotificationText");if(!t||!n||!a)return;if(0===e)return void(t.style.display="none");const{overdue:o,soon:r}=buildAlertLists();o.length>0?(t.className="btn btn-notification",a.textContent=1===o.length?"Vencida":"Vencidas"):(t.className="btn btn-notification warning",a.textContent="Próximas"),n.textContent=e,t.style.display="flex"}function showAlertBanner(e,t){const n=document.getElementById("alertFloatingBanner");if(n&&n.remove(),0===e&&0===t)return;if(sessionStorage.getItem("alertBannerShown"))return;sessionStorage.setItem("alertBannerShown","1"),e>0&&playNotificationSound();const a=document.createElement("div");a.id="alertFloatingBanner";let o="",r="banner-soon";e>0?(r="banner-overdue",o=`<i class="fas fa-exclamation-triangle"></i> <strong>${e} manutenção(ões) vencida(s)</strong>`,t>0&&(o+=` e <strong>${t} a vencer em 7 dias</strong>`)):o=`<i class="fas fa-clock"></i> <strong>${t} manutenção(ões) a vencer nos próximos 7 dias</strong>`,a.className=`alert-floating-banner ${r}`,a.innerHTML=`\n        <span>${o}</span>\n        <button onclick="goToAlerts()" class="banner-link">Ver alertas</button>\n        <button onclick="this.parentElement.remove()" class="banner-close">✕</button>\n    `,document.body.appendChild(a),setTimeout(()=>{a.parentElement&&a.remove()},1e4)}function playNotificationSound(){try{const e=new(window.AudioContext||window.webkitAudioContext),t=e.createOscillator(),n=e.createGain();t.connect(n),n.connect(e.destination),t.frequency.value=800,t.type="sine",n.gain.setValueAtTime(0,e.currentTime),n.gain.linearRampToValueAtTime(.1,e.currentTime+.05),n.gain.linearRampToValueAtTime(.1,e.currentTime+.15),n.gain.linearRampToValueAtTime(0,e.currentTime+.25),t.start(e.currentTime),t.stop(e.currentTime+.25),setTimeout(()=>{const t=e.createOscillator(),n=e.createGain();t.connect(n),n.connect(e.destination),t.frequency.value=1e3,t.type="sine",n.gain.setValueAtTime(0,e.currentTime),n.gain.linearRampToValueAtTime(.1,e.currentTime+.05),n.gain.linearRampToValueAtTime(.1,e.currentTime+.15),n.gain.linearRampToValueAtTime(0,e.currentTime+.25),t.start(e.currentTime),t.stop(e.currentTime+.25)},300)}catch(e){console.log("Notificação sonora não suportada neste navegador")}}function goToAlerts(){const e=document.querySelector('[data-tab="agenda"]');e&&e.click(),setTimeout(()=>{const e=document.getElementById("alertsSection");e&&e.scrollIntoView({behavior:"smooth",block:"start"})},100);const t=document.getElementById("alertFloatingBanner");t&&t.remove()}function renderCalendar(){const e=calendarDate.getFullYear(),t=calendarDate.getMonth();document.getElementById("calendarTitle").textContent=`${["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"][t]} ${e}`;const n=document.getElementById("calendarGrid");let a=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"].map(e=>`<div class="calendar-header">${e}</div>`).join("");const o=new Date(e,t,1).getDay(),r=new Date(e,t+1,0).getDate(),s=new Date(e,t,0).getDate(),i=new Date;i.setHours(0,0,0,0);const c={};maintenances.forEach(n=>{if(!n.date)return;const a=new Date(n.date+"T00:00:00"),o=n.duration||1;for(let r=0;r<o;r++){const s=new Date(a);s.setDate(s.getDate()+r);const i=s.getFullYear(),l=s.getMonth(),d=s.getDate();if(i===e&&l===t){c[d]||(c[d]=[]);const e=o>1?` (${r+1}/${o})`:"";c[d].push({...n,dayInfo:e})}}});for(let e=o-1;e>=0;e--)a+=`<div class="calendar-day other-month"><div class="calendar-day-num">${s-e}</div></div>`;for(let n=1;n<=r;n++){const o=new Date(e,t,n).getTime()===i.getTime();let r="";c[n]&&(c[n].slice(0,3).forEach(e=>{const t=getEffectiveStatus(e),n=e.dayInfo||"";r+=`<div class="calendar-event status-${t}" title="${e.type} — ${e.area}${n}" onclick="openViewModal('${e.id}')">\n                    <i class="fas fa-tools" style="font-size:9px;"></i> ${e.type}${n}\n                </div>`}),c[n].length>3&&(r+=`<div style="font-size:10px;color:#999;padding:1px 4px;">+${c[n].length-3} mais</div>`)),a+=`<div class="calendar-day${o?" today":""}">\n            <div class="calendar-day-num">${n}</div>\n            ${r}\n        </div>`}const l=o+r,d=l%7==0?0:7-l%7;for(let e=1;e<=d;e++)a+=`<div class="calendar-day other-month"><div class="calendar-day-num">${e}</div></div>`;n.innerHTML=a}function changeMonth(e){calendarDate.setMonth(calendarDate.getMonth()+e),renderCalendar()}function renderTable(){const e=document.getElementById("filterStatus").value,t=document.getElementById("filterArea").value,n=document.getElementById("filterType").value,a=document.getElementById("filterSearch").value.toLowerCase(),o=document.getElementById("filterDateFrom").value,r=document.getElementById("filterDateTo").value;let s=maintenances.filter(s=>{const i=getEffectiveStatus(s);if(e&&i!==e)return!1;if(t&&s.area!==t)return!1;if(n&&s.type!==n)return!1;if(a){if(!`${s.type} ${s.area} ${s.supplier} ${s.desc}`.toLowerCase().includes(a))return!1}return!(o&&s.date&&s.date<o)&&!(r&&s.date&&s.date>r)});s.sort((e,t)=>{const n=e.date||"";return(t.date||"").localeCompare(n)});const i=document.getElementById("manutTableBody");0!==s.length?i.innerHTML=s.map(e=>{const t=getEffectiveStatus(e),n=e.cost?formatMoney(e.cost):"-";let a="";"sim"===e.recurring&&(a+=' <span title="Recorrente" style="color:#3498db;font-size:11px;">↻</span>'),e.originId&&(a+=' <span title="Gerada automaticamente por recorrência" style="background:#e8f5e9;color:#2e7d32;font-size:10px;padding:2px 6px;border-radius:3px;font-weight:600;">AUTO</span>');const o=e.duration&&e.duration>1?`${e.duration} dias`:"1 dia";return`<tr>\n            <td><strong>${e.type}</strong>${a}</td>\n            <td>${e.area}</td>\n            <td>${e.supplier||"-"}</td>\n            <td>${formatDate(e.date)}</td>\n            <td>${o}</td>\n            <td>${formatDate(e.nextDate)}</td>\n            <td>${n}</td>\n            <td><span class="status-badge ${t}">${statusLabel(t)}</span></td>\n            <td>\n                <button class="action-btn view" onclick="openViewModal('${e.id}')"><i class="fas fa-eye"></i></button>\n                <button class="action-btn edit" onclick="openEditModal('${e.id}')"><i class="fas fa-edit"></i></button>\n                <button class="action-btn delete" onclick="deleteManut('${e.id}')"><i class="fas fa-trash"></i></button>\n            </td>\n        </tr>`}).join(""):i.innerHTML='<tr><td colspan="9" class="no-data">\n            <i class="fas fa-tools" style="font-size:40px;margin-bottom:10px;display:block;"></i>\n            <p>Nenhuma manutenção encontrada.</p>\n        </td></tr>'}function populateFilterOptions(){const e=document.getElementById("filterArea");e.innerHTML='<option value="">Todas as Áreas</option>',maintenanceAreas.sort().forEach(t=>{const n=document.createElement("option");n.value=t,n.textContent=t,e.appendChild(n)});const t=document.getElementById("filterType");t.innerHTML='<option value="">Todos os Tipos</option>',maintenanceTypes.sort().forEach(e=>{const n=document.createElement("option");n.value=e,n.textContent=e,t.appendChild(n)}),document.getElementById("areasList").innerHTML=maintenanceAreas.sort().map(e=>`<option value="${e}">`).join(""),document.getElementById("typesList").innerHTML=maintenanceTypes.sort().map(e=>`<option value="${e}">`).join("")}function clearDateFilters(){document.getElementById("filterDateFrom").value="",document.getElementById("filterDateTo").value="",renderTable()}function switchTab(e,t){document.querySelectorAll(".manut-tab").forEach(e=>e.classList.remove("active")),document.querySelectorAll(".manut-panel").forEach(e=>e.classList.remove("active"));document.getElementById({agenda:"tabAgenda",lista:"tabLista",tipos:"tabTipos",areas:"tabAreas",dashboard:"tabDashboard"}[e]).classList.add("active"),t.classList.add("active"),"dashboard"===e&&"function"==typeof updateManutDashboard&&updateManutDashboard()}function openManutModal(){editingId=null,pendingFiles=[],document.getElementById("modalTitle").textContent="Nova Manutenção",document.getElementById("manutForm").reset(),document.getElementById("manutId").value="",document.getElementById("uploadPreview").innerHTML="",document.getElementById("recurrenceFields").classList.remove("visible"),setDefaultDate(),document.getElementById("manutModal").classList.add("active")}function openEditModal(e){const t=maintenances.find(t=>t.id===e);if(!t)return;editingId=e,pendingFiles=[],document.getElementById("modalTitle").textContent="Editar Manutenção",document.getElementById("manutId").value=t.id,document.getElementById("manutType").value=t.type||"",document.getElementById("manutArea").value=t.area||"",document.getElementById("manutSupplier").value=t.supplier||"",document.getElementById("manutDate").value=t.date||"",document.getElementById("manutDuration").value=t.duration||1,document.getElementById("manutNextDate").value=t.nextDate||"",document.getElementById("manutCost").value=t.cost||"",document.getElementById("manutStatus").value=t.status||"pendente",document.getElementById("manutRecurring").value=t.recurring||"nao",document.getElementById("manutPeriod").value=t.period||"365",document.getElementById("manutDesc").value=t.desc||"",document.getElementById("manutLaunchExpense").value=t.launchExpense||"nao",renderExistingFiles(t.files||[]);const n=document.getElementById("recurrenceFields");"sim"===t.recurring?n.classList.add("visible"):n.classList.remove("visible"),document.getElementById("manutModal").classList.add("active")}function renderExistingFiles(e){document.getElementById("uploadPreview").innerHTML=e.map((e,t)=>e.url&&/\.(jpg|jpeg|png|gif|webp)/i.test(e.url)?`<div class="upload-preview-item">\n                <img src="${e.url}" alt="${e.name}" loading="lazy" onclick="window.open('${e.url}','_blank')">\n                <button class="remove-file" onclick="removeExistingFile(${t})" title="Remover">×</button>\n                <div class="file-name">${e.name}</div>\n            </div>`:`<div class="upload-preview-item">\n                <a href="${e.url}" target="_blank"><i class="fas fa-file-pdf"></i> ${e.name}</a>\n                <button class="remove-file" onclick="removeExistingFile(${t})" title="Remover" style="top:-3px;right:-3px;">×</button>\n            </div>`).join("")}function removeExistingFile(e){if(!editingId)return;const t=maintenances.find(e=>e.id===editingId);t&&t.files&&(t.files.splice(e,1),renderExistingFiles(t.files))}function closeManutModal(){document.getElementById("manutModal").classList.remove("active"),pendingFiles=[],editingId=null}function toggleRecurrence(){const e=document.getElementById("manutRecurring").value,t=document.getElementById("recurrenceFields");"sim"===e?(t.classList.add("visible"),autoCalcNextDate()):t.classList.remove("visible")}function autoCalcNextDate(){const e=document.getElementById("manutDate").value,t=parseInt(document.getElementById("manutPeriod").value||"365");if(!e)return;const n=new Date(e+"T12:00:00");n.setDate(n.getDate()+t),document.getElementById("manutNextDate").value=n.toISOString().split("T")[0]}function handleFileSelect(e){Array.from(e.target.files).forEach(e=>pendingFiles.push(e)),renderPendingFiles(),e.target.value=""}function renderPendingFiles(){const e=document.getElementById("uploadPreview");e.querySelectorAll('[data-pending] img[src^="blob:"]').forEach(e=>{URL.revokeObjectURL(e.src)}),e.querySelectorAll("[data-pending]").forEach(e=>e.remove());const t=pendingFiles.map((e,t)=>{if(e.type.startsWith("image/")){return`<div class="upload-preview-item" data-pending="${t}">\n                <img src="${URL.createObjectURL(e)}" alt="${e.name}" loading="lazy" onload="URL.revokeObjectURL(this.src)">\n                <button class="remove-file" onclick="removePendingFile(${t})">×</button>\n                <div class="file-name">${e.name}</div>\n            </div>`}return`<div class="upload-preview-item" data-pending="${t}">\n                <div style="padding:8px;background:#f5f5f5;border-radius:5px;font-size:12px;max-width:70px;word-break:break-all;">\n                    <i class="fas fa-file-pdf" style="color:#e74c3c;"></i><br>${e.name}\n                </div>\n                <button class="remove-file" onclick="removePendingFile(${t})">×</button>\n            </div>`});e.insertAdjacentHTML("beforeend",t.join(""))}function removePendingFile(e){pendingFiles.splice(e,1),renderPendingFiles()}async function uploadPendingFiles(e){const t=[];for(const n of pendingFiles)try{const a=await fileToBase64(n),o=await fetch(`${API_URL_MANUT}/api/upload`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({file:a,filename:n.name,userId:e})}),r=await o.json();r.success&&t.push({name:n.name,url:r.url,publicId:r.publicId})}catch(e){console.error("Erro ao enviar arquivo:",e)}return t}function fileToBase64(e){return new Promise((t,n)=>{const a=new FileReader;a.onload=e=>t(e.target.result),a.onerror=n,a.readAsDataURL(e)})}async function saveManut(e){e.preventDefault();const t=document.getElementById("saveBtn");t.disabled=!0,t.innerHTML='<i class="fas fa-spinner fa-spin"></i> Salvando...';try{const e=localStorage.getItem("user-id")||"admin";let t=[];pendingFiles.length>0&&API_URL_MANUT&&(showToast("Enviando arquivos...","warning"),t=await uploadPendingFiles(e));const n=editingId||generateId(),a=document.getElementById("manutType").value.trim(),o=document.getElementById("manutArea").value.trim(),r=document.getElementById("manutSupplier").value.trim(),s=document.getElementById("manutDate").value,i=parseInt(document.getElementById("manutDuration").value)||1,c=document.getElementById("manutNextDate").value,l=document.getElementById("manutCost").value,d=document.getElementById("manutStatus").value,u=document.getElementById("manutRecurring").value,m=document.getElementById("manutPeriod").value,p=document.getElementById("manutDesc").value.trim(),g=document.getElementById("manutLaunchExpense").value;let f=[],v=null;if(editingId){const e=maintenances.find(e=>e.id===editingId);f=e?.files||[],v=e?.date}let y=c;editingId&&v&&v!==s&&(console.log(`📅 Data alterada de ${v} para ${s} - limpando nextDate`),y="");const h={id:n,type:a,area:o,supplier:r,date:s,duration:i,nextDate:y,cost:l?parseFloat(l):null,status:d,recurring:u,period:"sim"===u?m:null,desc:p,launchExpense:g,files:[...f,...t],updatedAt:(new Date).toISOString()};if(editingId){const e=maintenances.findIndex(e=>e.id===editingId);h.createdAt=maintenances[e].createdAt,maintenances[e]=h}else h.createdAt=(new Date).toISOString(),maintenances.push(h);"sim"===g&&l&&parseFloat(l)>0&&await launchAsExpense(h,e),"sim"===h.recurring&&"concluida"===h.status&&h.period&&createRecurringMaintenance(h);if(await saveMaintenances()){const e="sim"===h.recurring&&"concluida"===h.status&&h.period;showToast((editingId?"Manutenção atualizada!":"Manutenção cadastrada!")+(e?" Próxima manutenção agendada automaticamente.":""),"success"),closeManutModal(),updateDashboard(),renderAlerts(),renderCalendar(),renderTable(),populateFilterOptions()}else showToast("Erro ao salvar. Tente novamente.","error")}catch(e){console.error("Erro ao salvar manutenção:",e),showToast("Erro ao salvar.","error")}finally{t.disabled=!1,t.innerHTML='<i class="fas fa-save"></i> Salvar',pendingFiles=[]}}async function launchAsExpense(e,t){try{const n=await fetch(`${API_URL_MANUT}/api/sync/${t}`),a=await n.json(),o=e.date?parseInt(e.date.substring(5,7))-1:(new Date).getMonth(),r={};for(let e=0;e<12;e++)r[e]=[];a.expenses&&Array.isArray(a.expenses)&&a.expenses.forEach(e=>{(e.items||[]).forEach(t=>{r[e.month]=r[e.month]||[],r[e.month].push({...t,year:t.date?parseInt(t.date.substring(0,4)):e.year})})}),r[o].push({id:generateId(),date:e.date,category:"Manutenção",supplier:e.supplier||e.type,description:`Manutenção: ${e.type} — ${e.area}`,paymentMethod:"Conta Corrente",amount:e.cost,year:e.date?parseInt(e.date.substring(0,4)):(new Date).getFullYear()});const s=[];for(let e=0;e<12;e++)if(r[e]&&r[e].length>0){const t={};r[e].forEach(e=>{const n=e.year||(new Date).getFullYear();t[n]||(t[n]=[]),t[n].push(e)}),Object.entries(t).forEach(([t,n])=>{s.push({month:e,year:parseInt(t),items:n})})}await fetch(`${API_URL_MANUT}/api/sync`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userId:t,expenses:s})}),showToast("Despesa lançada automaticamente!","success")}catch(e){console.error("Erro ao lançar despesa:",e)}}async function deleteManut(e){confirm("Deseja excluir esta manutenção?")&&(maintenances=maintenances.filter(t=>t.id!==e),await saveMaintenances(),updateDashboard(),renderAlerts(),renderCalendar(),renderTable(),populateFilterOptions(),showToast("Manutenção excluída.","success"))}function openViewModal(e){const t=maintenances.find(t=>t.id===e);if(!t)return;viewingId=e;const n=getEffectiveStatus(t);let a="";a=t.files&&t.files.length>0?'<div class="photo-list">'+t.files.map(e=>/\.(jpg|jpeg|png|gif|webp)/i.test(e.url)?`<div class="photo-item"><img src="${e.url}" alt="${e.name}" loading="lazy" onclick="window.open('${e.url}','_blank')" title="${e.name}"></div>`:`<div class="photo-item"><a href="${e.url}" target="_blank"><i class="fas fa-file-pdf"></i> ${e.name}</a></div>`).join("")+"</div>":'<span style="color:#999;font-size:13px;">Nenhum arquivo</span>';const o=t.originId?'<span style="background:#e8f5e9;color:#2e7d32;font-size:11px;padding:3px 8px;border-radius:4px;font-weight:600;margin-left:8px;">🔄 GERADA AUTOMATICAMENTE</span>':"",r=t.duration&&t.duration>1?`${t.duration} dias`:"1 dia";document.getElementById("viewContent").innerHTML=`\n        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 20px;">\n            <div style="grid-column:1/-1;"><strong style="color:#7f8c8d;font-size:12px;">TIPO</strong><br>${t.type}${o}</div>\n            <div><strong style="color:#7f8c8d;font-size:12px;">ÁREA/CÔMODO</strong><br>${t.area}</div>\n            <div><strong style="color:#7f8c8d;font-size:12px;">FORNECEDOR</strong><br>${t.supplier||"-"}</div>\n            <div><strong style="color:#7f8c8d;font-size:12px;">STATUS</strong><br><span class="status-badge ${n}">${statusLabel(n)}</span></div>\n            <div><strong style="color:#7f8c8d;font-size:12px;">DATA DE EXECUÇÃO</strong><br>${formatDate(t.date)}</div>\n            <div><strong style="color:#7f8c8d;font-size:12px;">DURAÇÃO</strong><br>${r}</div>\n            <div><strong style="color:#7f8c8d;font-size:12px;">PRÓXIMA PREVISÃO</strong><br>${formatDate(t.nextDate)||"-"}</div>\n            <div><strong style="color:#7f8c8d;font-size:12px;">CUSTO</strong><br>${t.cost?formatMoney(t.cost):"-"}</div>\n            <div><strong style="color:#7f8c8d;font-size:12px;">RECORRENTE</strong><br>${"sim"===t.recurring?"Sim ("+periodLabel(t.period)+")":"Não"}</div>\n            ${t.desc?`<div style="grid-column:1/-1;"><strong style="color:#7f8c8d;font-size:12px;">DESCRIÇÃO</strong><br>${t.desc}</div>`:""}\n            <div style="grid-column:1/-1;"><strong style="color:#7f8c8d;font-size:12px;">FOTOS / DOCUMENTOS</strong><br>${a}</div>\n        </div>\n    `,document.getElementById("viewModal").classList.add("active")}function closeViewModal(){document.getElementById("viewModal").classList.remove("active"),viewingId=null}function editFromView(){const e=viewingId;closeViewModal(),e&&openEditModal(e)}function renderTypesList(){const e=document.getElementById("typesTableBody");if(!e)return;const t=[...maintenanceTypes].sort((e,t)=>e.localeCompare(t));0!==t.length?(e.innerHTML=t.map(e=>`\n        <tr>\n            <td>${e}</td>\n            <td style="white-space:nowrap;">\n                <button class="action-btn edit" onclick="editType('${escapeAttr(e)}')" title="Renomear"><i class="fas fa-edit"></i></button>\n                <button class="action-btn delete" onclick="deleteType('${escapeAttr(e)}')" title="Excluir"><i class="fas fa-trash"></i></button>\n            </td>\n        </tr>\n    `).join(""),document.getElementById("typesList").innerHTML=t.map(e=>`<option value="${e}">`).join("")):e.innerHTML='<tr><td colspan="2" class="no-data" style="padding:20px;text-align:center;color:#999;">Nenhum tipo cadastrado.</td></tr>'}function addType(){const e=document.getElementById("newTypeName"),t=e.value.trim();t?maintenanceTypes.map(e=>e.toLowerCase()).includes(t.toLowerCase())?showToast("Este tipo já existe.","warning"):(maintenanceTypes.push(t),e.value="",saveTypes().then(e=>{e?(showToast("Tipo adicionado!","success"),renderTypesList(),populateFilterOptions()):showToast("Erro ao salvar.","error")})):showToast("Digite o nome do tipo.","warning")}function editType(e){const t=prompt("Renomear tipo:",e);if(!t||t.trim()===e)return;const n=t.trim();if(maintenanceTypes.map(e=>e.toLowerCase()).includes(n.toLowerCase()))return void showToast("Este tipo já existe.","warning");maintenances.forEach(t=>{t.type===e&&(t.type=n)});const a=maintenanceTypes.indexOf(e);-1!==a&&(maintenanceTypes[a]=n),Promise.all([saveTypes(),saveMaintenances()]).then(()=>{showToast("Tipo renomeado!","success"),renderTypesList(),renderTable(),populateFilterOptions()})}function deleteType(e){const t=maintenances.some(t=>t.type===e)?`O tipo "${e}" está em uso em ${maintenances.filter(t=>t.type===e).length} manutenção(ões). Deseja excluir mesmo assim?`:`Excluir o tipo "${e}"?`;confirm(t)&&(maintenanceTypes=maintenanceTypes.filter(t=>t!==e),saveTypes().then(e=>{e?(showToast("Tipo excluído.","success"),renderTypesList(),populateFilterOptions()):showToast("Erro ao salvar.","error")}))}function escapeAttr(e){return e.replace(/'/g,"\\'")}function renderAreasList(){const e=document.getElementById("areasTableBody");if(!e)return;const t=[...maintenanceAreas].sort((e,t)=>e.localeCompare(t));0!==t.length?(e.innerHTML=t.map(e=>`\n        <tr>\n            <td>${e}</td>\n            <td style="white-space:nowrap;">\n                <button class="action-btn edit" onclick="editArea('${escapeAttr(e)}')" title="Renomear"><i class="fas fa-edit"></i></button>\n                <button class="action-btn delete" onclick="deleteArea('${escapeAttr(e)}')" title="Excluir"><i class="fas fa-trash"></i></button>\n            </td>\n        </tr>\n    `).join(""),document.getElementById("areasList").innerHTML=t.map(e=>`<option value="${e}">`).join("")):e.innerHTML='<tr><td colspan="2" class="no-data" style="padding:20px;text-align:center;color:#999;">Nenhuma área cadastrada.</td></tr>'}function addArea(){const e=document.getElementById("newAreaName"),t=e.value.trim();t?maintenanceAreas.map(e=>e.toLowerCase()).includes(t.toLowerCase())?showToast("Esta área já existe.","warning"):(maintenanceAreas.push(t),e.value="",saveAreas().then(e=>{e?(showToast("Área adicionada!","success"),renderAreasList(),populateFilterOptions()):showToast("Erro ao salvar.","error")})):showToast("Digite o nome da área.","warning")}function editArea(e){const t=prompt("Renomear área:",e);if(!t||t.trim()===e)return;const n=t.trim();if(maintenanceAreas.map(e=>e.toLowerCase()).includes(n.toLowerCase()))return void showToast("Esta área já existe.","warning");maintenances.forEach(t=>{t.area===e&&(t.area=n)});const a=maintenanceAreas.indexOf(e);-1!==a&&(maintenanceAreas[a]=n),Promise.all([saveAreas(),saveMaintenances()]).then(()=>{showToast("Área renomeada!","success"),renderAreasList(),renderTable(),populateFilterOptions()})}function deleteArea(e){const t=maintenances.some(t=>t.area===e)?`A área "${e}" está em uso em ${maintenances.filter(t=>t.area===e).length} manutenção(ões). Deseja excluir mesmo assim?`:`Excluir a área "${e}"?`;confirm(t)&&(maintenanceAreas=maintenanceAreas.filter(t=>t!==e),saveAreas().then(e=>{e?(showToast("Área excluída.","success"),renderAreasList(),populateFilterOptions()):showToast("Erro ao salvar.","error")}))}function createRecurringMaintenance(e){const t=parseInt(e.period);if(!t||isNaN(t))return;const n=e.date?new Date(e.date+"T12:00:00"):new Date,a=new Date(n);a.setDate(a.getDate()+t);const o=a.toISOString().split("T")[0];if(maintenances.some(t=>t.type===e.type&&t.area===e.area&&t.date===o&&("pendente"===t.status||"em_andamento"===t.status)))return void console.log("⚠️ Próxima manutenção recorrente já existe — não duplicando.");const r={id:generateId(),type:e.type,area:e.area,supplier:e.supplier||"",date:o,nextDate:"",cost:null,status:"pendente",recurring:"sim",period:e.period,desc:e.desc||"",launchExpense:"nao",files:[],createdAt:(new Date).toISOString(),updatedAt:(new Date).toISOString(),originId:e.id};maintenances.push(r),console.log(`✅ Próxima manutenção recorrente criada: ${r.type} em ${o}`)}function generateId(){return"manut_"+Date.now()+"_"+Math.random().toString(36).substr(2,9)}function formatDate(e){if(!e)return"-";const[t,n,a]=e.split("-");return`${a}/${n}/${t}`}function periodLabel(e){return{30:"Mensal",60:"Bimestral",90:"Trimestral",180:"Semestral",365:"Anual"}[e]||e+" dias"}function showToast(e,t="success"){const n=document.getElementById("toastEl");n.innerHTML=e+' <button onclick="this.parentElement.className=\'toast\'" style="background:none;border:none;color:inherit;font-size:18px;cursor:pointer;margin-left:8px;padding:4px;">&times;</button>',n.className=`toast show ${t}`,setTimeout(()=>{n.className.includes("show")&&(n.className="toast")},5e3)}document.addEventListener("DOMContentLoaded",async function(){setTimeout(applyManutPermissions,500),await loadData(),updateDashboard(),renderAlerts(),renderCalendar(),renderTable(),populateFilterOptions(),setDefaultDate(),renderTypesList(),renderAreasList(),console.log("✅ Manutenções carregadas")}),document.addEventListener("DOMContentLoaded",function(){document.getElementById("manutDate")?.addEventListener("change",function(){"sim"===document.getElementById("manutRecurring").value&&autoCalcNextDate()}),document.getElementById("manutPeriod")?.addEventListener("change",autoCalcNextDate)});const CONTRACTS_STORAGE_KEY="maintenanceContracts";let contracts=[],currentContractFile=null,editingContractId=null;async function loadContracts(){const e=localStorage.getItem("user-id")||"admin";let t=!1;if(API_URL_MANUT&&e)try{const n=await fetch(`${API_URL_MANUT}/api/sync/${e}`);if(n.ok){const e=await n.json();if(Array.isArray(e.contracts)&&e.contracts.length>0){contracts=e.contracts;let t=!1;contracts=contracts.map(e=>void 0===e.renewed?(t=!0,{...e,renewed:!1}):e);try{localStorage.setItem(CONTRACTS_STORAGE_KEY,JSON.stringify(contracts))}catch(e){}return t&&saveContractsToCloud(),void console.log(`✅ ${contracts.length} contratos carregados do MongoDB`)}t=!0}}catch(e){console.warn("⚠️ Falha ao carregar contratos do MongoDB, usando cache local:",e.message)}const n=localStorage.getItem(CONTRACTS_STORAGE_KEY);contracts=n?JSON.parse(n):[];let a=!1;contracts=contracts.map(e=>void 0===e.renewed?(a=!0,{...e,renewed:!1}):e),a&&(saveContractsToStorage(),console.log("Contratos migrados para incluir campo renewed")),t&&contracts.length>0&&(console.log(`🔄 Migrando ${contracts.length} contratos do localStorage para o MongoDB...`),saveContractsToCloud().then(()=>{console.log(`✅ ${contracts.length} contratos migrados para o MongoDB com sucesso!`)}).catch(e=>{console.error("❌ Falha na migração automática:",e)})),console.log(`📦 ${contracts.length} contratos carregados do cache local`)}function saveContractsToStorage(){try{const e=contracts.map(e=>{if(e.file&&e.file.data&&e.file.url){const{data:t,...n}=e.file;return{...e,file:n}}return e});localStorage.setItem(CONTRACTS_STORAGE_KEY,JSON.stringify(e))}catch(e){console.warn("Não foi possível salvar contratos no cache local:",e.message)}saveContractsToCloud()}async function saveContractsToCloud(){const e=localStorage.getItem("user-id")||"admin";if(API_URL_MANUT&&e)try{const t=contracts.map(e=>{if(e.file&&e.file.data){const{data:t,...n}=e.file;return{...e,file:n}}return e}),n=await fetch(`${API_URL_MANUT}/api/sync`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userId:e,contracts:t})});n.ok?console.log(`✅ ${t.length} contratos salvos no MongoDB`):console.error("Erro ao salvar contratos na nuvem:",n.status)}catch(e){console.error("Falha ao salvar contratos no MongoDB:",e.message)}}async function openContractsModal(){await loadContracts(),updateContractsDashboard(),filterContracts(),checkContractAlerts(),document.getElementById("contractsModal").classList.add("active")}function closeContractsModal(){document.getElementById("contractsModal").classList.remove("active"),clearContractForm()}function clearContractForm(){document.getElementById("contractForm").reset(),document.getElementById("contractFilePreview").innerHTML="",currentContractFile=null,editingContractId=null,document.getElementById("saveContractBtn").innerHTML='<i class="fas fa-save"></i> Salvar Contrato'}function formatCurrency(e){let t=e.value.replace(/\D/g,"");t=(t/100).toFixed(2),t=t.replace(".",","),t=t.replace(/(\d)(?=(\d{3})+(?!\d))/g,"$1."),e.value="R$ "+t}function handleContractFileUpload(e){const t=e.target.files[0];if(!t)return;if(t.size>2097152){return showToast(`Arquivo muito grande (${(t.size/1048576).toFixed(2)}MB). Máximo: 2MB. Comprima o arquivo antes de anexar.`,"error"),void(e.target.value="")}if(t.size>512e3){const e=(t.size/1048576).toFixed(2);console.warn(`⚠️ Arquivo grande: ${e}MB. Considere comprimir para economizar espaço.`)}if(!["application/pdf","image/jpeg","image/jpg","image/png"].includes(t.type))return showToast("Tipo de arquivo inválido. Use PDF, JPG ou PNG","error"),void(e.target.value="");currentContractFile=t;const n=document.getElementById("contractFilePreview"),a="application/pdf"===t.type?"fa-file-pdf":"fa-file-image",o=(t.size/1024).toFixed(1)+" KB";n.innerHTML=`\n        <div class="contract-file-preview">\n            <i class="fas ${a}"></i>\n            <div class="file-info">\n                <div class="file-name">${t.name}</div>\n                <div class="file-size">${o}</div>\n            </div>\n            <button type="button" class="btn btn-secondary" onclick="removeContractFile()"\n                    style="padding: 6px 12px; font-size: 12px;">\n                <i class="fas fa-times"></i>\n            </button>\n        </div>\n    `}function removeContractFile(){currentContractFile=null,document.getElementById("contractFile").value="",document.getElementById("contractFilePreview").innerHTML=""}async function saveContract(e){e.preventDefault();const t=document.getElementById("contractCompany").value.trim(),n=document.getElementById("contractResponsible").value.trim(),a=document.getElementById("contractPhone").value.trim(),o=document.getElementById("contractStartDate").value,r=document.getElementById("contractEndDate").value,s=document.getElementById("contractCost").value,i=document.getElementById("contractDescription").value.trim();if(new Date(o)>=new Date(r))return void showToast("Data de fim deve ser posterior à data de início","error");const c=parseFloat(s.replace(/[R$\s.]/g,"").replace(",",".")),l=document.getElementById("saveContractBtn");l.disabled=!0,l.innerHTML='<i class="fas fa-spinner fa-spin"></i> Salvando...';try{const e=localStorage.getItem("user-id")||"admin";let s=null;if(currentContractFile)if(currentContractFile.url)s=currentContractFile;else{showToast("Enviando arquivo para nuvem...","warning");const t=await new Promise((e,t)=>{const n=new FileReader;n.onload=t=>e(t.target.result),n.onerror=t,n.readAsDataURL(currentContractFile)});if(API_URL_MANUT){const n=await fetch(`${API_URL_MANUT}/api/upload`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({file:t,filename:currentContractFile.name,userId:e})}),a=await n.json();if(!a.success)throw new Error("Falha no upload para o servidor");s={name:currentContractFile.name,type:currentContractFile.type,size:currentContractFile.size,url:a.url,publicId:a.publicId},console.log("✅ Arquivo enviado para Cloudinary:",a.url)}else console.warn("⚠️ API não disponível, salvando em base64 (não recomendado)"),s={name:currentContractFile.name,type:currentContractFile.type,size:currentContractFile.size,data:t}}else if(editingContractId){const e=contracts.find(e=>e.id===editingContractId);s=e?.file||null}const l={id:editingContractId||Date.now().toString(),company:t,responsible:n,phone:a,startDate:o,endDate:r,cost:c,description:i,file:s,createdAt:editingContractId&&contracts.find(e=>e.id===editingContractId)?.createdAt||(new Date).toISOString(),renewed:editingContractId&&contracts.find(e=>e.id===editingContractId)?.renewed||!1};if(editingContractId){console.log("=== EDITANDO CONTRATO ==="),console.log("ID editado:",editingContractId);const e=contracts.findIndex(e=>e.id===editingContractId);console.log("Índice encontrado:",e),console.log("Dados do contrato:",l),contracts[e]=l,showToast("Contrato atualizado com sucesso!","success"),console.log("=== EDIÇÃO CONCLUÍDA ===")}else console.log("=== CRIANDO NOVO CONTRATO ==="),console.log("Dados do contrato:",l),contracts.push(l),showToast("Contrato cadastrado com sucesso!","success"),console.log("=== CRIAÇÃO CONCLUÍDA ===");saveContractsToStorage(),renderContractsList(),clearContractForm()}catch(e){console.error("Erro ao salvar contrato:",e),showToast("Erro ao salvar contrato","error")}finally{l.disabled=!1,l.innerHTML='<i class="fas fa-save"></i> Salvar Contrato'}}function renderContractsList(){updateContractsDashboard(),filterContracts()}function viewContractFile(e){const t=contracts.find(t=>t.id===e);if(!t||!t.file)return;const n=t.file.url||t.file.data;if(t.file.url)return void window.open(n,"_blank");window.open().document.write(`\n        <!DOCTYPE html>\n        <html>\n        <head>\n            <title>${t.file.name} - ${t.company}</title>\n            <style>\n                body { margin: 0; padding: 20px; background: #2c3e50; display: flex; justify-content: center; align-items: center; min-height: 100vh; }\n                img { max-width: 100%; height: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }\n                iframe { width: 100%; height: 90vh; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }\n            </style>\n        </head>\n        <body>\n            ${"application/pdf"===t.file.type?`<iframe src="${t.file.data}"></iframe>`:`<img src="${t.file.data}" alt="${t.file.name}">`}\n        </body>\n        </html>\n    `)}function editContract(e){const t=contracts.find(t=>t.id===e);if(t){if(editingContractId=e,document.getElementById("contractCompany").value=t.company,document.getElementById("contractResponsible").value=t.responsible||"",document.getElementById("contractPhone").value=t.phone||"",document.getElementById("contractStartDate").value=t.startDate,document.getElementById("contractEndDate").value=t.endDate,document.getElementById("contractCost").value=t.cost.toLocaleString("pt-BR",{style:"currency",currency:"BRL"}),document.getElementById("contractDescription").value=t.description||"",t.file){const e="application/pdf"===t.file.type?"fa-file-pdf":"fa-file-image",n=(t.file.size/1024).toFixed(1)+" KB";document.getElementById("contractFilePreview").innerHTML=`\n            <div class="contract-file-preview">\n                <i class="fas ${e}"></i>\n                <div class="file-info">\n                    <div class="file-name">${t.file.name}</div>\n                    <div class="file-size">${n}</div>\n                </div>\n                <button type="button" class="btn btn-secondary" onclick="removeContractFile()"\n                        style="padding: 6px 12px; font-size: 12px;">\n                    <i class="fas fa-times"></i>\n                </button>\n            </div>\n        `,currentContractFile=t.file}document.getElementById("saveContractBtn").innerHTML='<i class="fas fa-save"></i> Atualizar Contrato',document.querySelector("#contractsModal .modal-box").scrollTop=0}}function deleteContract(e){const t=contracts.find(t=>t.id===e);t&&confirm(`Tem certeza que deseja excluir o contrato com ${t.company}?`)&&(contracts=contracts.filter(t=>t.id!==e),saveContractsToStorage(),renderContractsList(),updateContractsDashboard(),showToast("Contrato excluído com sucesso!","success"))}function formatPhone(e){let t=e.value.replace(/\D/g,"");t=t.length<=10?t.replace(/(\d{2})(\d{4})(\d{0,4})/,"($1) $2-$3"):t.replace(/(\d{2})(\d{5})(\d{0,4})/,"($1) $2-$3"),e.value=t}function updateContractsDashboard(){const e=new Date;e.setHours(0,0,0,0);const t=new Date(e);t.setDate(t.getDate()+30);const n=contracts.length,a=contracts.filter(t=>new Date(t.endDate)>=e&&!t.renewed).reduce((e,t)=>e+t.cost,0),o=contracts.filter(t=>new Date(t.endDate)>=e&&!t.renewed).length,r=contracts.filter(n=>{const a=new Date(n.endDate);return a>=e&&a<=t&&!n.renewed}).length;document.getElementById("dashboardTotalContracts").textContent=n,document.getElementById("dashboardTotalCost").textContent=a.toLocaleString("pt-BR",{style:"currency",currency:"BRL"}),document.getElementById("dashboardActiveContracts").textContent=o,document.getElementById("dashboardExpiringContracts").textContent=r}let allContracts=[];function filterContracts(){const e=document.getElementById("contractSearchInput").value.toLowerCase(),t=document.getElementById("contractStatusFilter").value,n=new Date;n.setHours(0,0,0,0);let a=contracts.filter(a=>{if(!(a.company.toLowerCase().includes(e)||a.responsible&&a.responsible.toLowerCase().includes(e)))return!1;if(!t)return!0;if("renewed"===t)return!0===a.renewed;const o=new Date(a.endDate),r=Math.ceil((o-n)/864e5);return!a.renewed&&("active"===t&&r>30||("expiring"===t&&r>=0&&r<=30||"expired"===t&&r<0))});allContracts=a,renderFilteredContracts(a)}function renderFilteredContracts(e){const t=document.getElementById("contractsList");if(0===e.length)return void(t.innerHTML='\n            <div class="contracts-empty">\n                <i class="fas fa-search"></i>\n                <p>Nenhum contrato encontrado</p>\n                <small>Tente ajustar os filtros de busca</small>\n            </div>\n        ');const n=new Date;n.setHours(0,0,0,0);const a=e.sort((e,t)=>new Date(t.createdAt)-new Date(e.createdAt)).map(e=>{const t=new Date(e.endDate),a=Math.ceil((t-n)/864e5);let o="active",r="Ativo";e.renewed?(o="renewed",r="Renovado"):a<0?(o="expired",r="Vencido"):a<=30&&(o="expiring",r="A Vencer");const s=e.cost.toLocaleString("pt-BR",{style:"currency",currency:"BRL"});return`\n                <div class="contract-card">\n                    <div class="contract-info">\n                        <div class="contract-header">\n                            <div class="contract-company">${e.company}</div>\n                            <div class="contract-status ${o}">${r}</div>\n                        </div>\n\n                        ${e.description?`<p style="color: #7f8c8d; font-size: 13px; margin: 8px 0;">${e.description}</p>`:""}\n\n                        <div class="contract-details">\n                            <div class="contract-detail-item">\n                                <i class="fas fa-user"></i>\n                                Responsável: <strong>${e.responsible||"-"}</strong>\n                            </div>\n                            <div class="contract-detail-item">\n                                <i class="fas fa-phone"></i>\n                                Telefone: <strong>${e.phone||"-"}</strong>\n                            </div>\n                            <div class="contract-detail-item">\n                                <i class="fas fa-calendar-alt"></i>\n                                Vigência: <strong>${formatDate(e.startDate)} - ${formatDate(e.endDate)}</strong>\n                            </div>\n                            <div class="contract-detail-item">\n                                <i class="fas fa-dollar-sign"></i>\n                                Custo Mensal: <strong>${s}</strong>\n                            </div>\n                            ${a>=0?`\n                            <div class="contract-detail-item">\n                                <i class="fas fa-clock"></i>\n                                ${0===a?"Vence hoje":`Vence em <strong>${a} dia(s)</strong>`}\n                            </div>\n                            `:`\n                            <div class="contract-detail-item">\n                                <i class="fas fa-exclamation-triangle"></i>\n                                Vencido há <strong>${Math.abs(a)} dia(s)</strong>\n                            </div>\n                            `}\n                            ${e.file?`\n                            <div class="contract-detail-item">\n                                <i class="fas fa-paperclip"></i>\n                                Arquivo: <strong>${e.file.name}</strong>\n                            </div>\n                            `:""}\n                        </div>\n                    </div>\n\n                    <div class="contract-actions">\n                        ${e.file?`\n                        <button class="btn-contract-action" onclick="viewContractFile('${e.id}')">\n                            <i class="fas fa-eye"></i> Ver Arquivo\n                        </button>\n                        `:""}\n                        ${e.renewed?"":`\n                        <button class="btn-contract-action" onclick="renewContract('${e.id}')">\n                            <i class="fas fa-sync-alt"></i> Renovar\n                        </button>\n                        `}\n                        <button class="btn-contract-action" onclick="editContract('${e.id}')">\n                            <i class="fas fa-edit"></i> Editar\n                        </button>\n                        <button class="btn-contract-action delete" onclick="deleteContract('${e.id}')">\n                            <i class="fas fa-trash"></i> Excluir\n                        </button>\n                    </div>\n                </div>\n            `}).join("");t.innerHTML=a}function clearContractFilters(){document.getElementById("contractSearchInput").value="",document.getElementById("contractStatusFilter").value="",filterContracts()}function cleanOldContractFiles(){const e=new Date;e.setHours(0,0,0,0);const t=contracts.filter(e=>e.file),n=t.filter(e=>e.renewed),a=t.filter(t=>{const n=new Date(t.endDate);return Math.ceil((e-n)/864e5)>365&&!t.renewed}),o=n.length+a.length;if(0===o)return void alert("Não há arquivos de contratos antigos para limpar.");const r=`Encontrados ${o} contratos com arquivos que podem ser removidos:\n\n• ${n.length} contratos renovados\n• ${a.length} contratos vencidos há mais de 1 ano\n\nOs dados dos contratos serão mantidos, apenas os ARQUIVOS ANEXOS serão removidos.\n\nDeseja continuar?`;if(!confirm(r))return;let s=0;const i=[];contracts=contracts.map(t=>t.renewed&&t.file||t.file&&(()=>{const n=new Date(t.endDate);return Math.ceil((e-n)/864e5)>365&&!t.renewed})()?(s++,t.file&&t.file.publicId&&i.push({publicId:t.file.publicId,resourceType:"application/pdf"===t.file.type?"raw":"image"}),{...t,file:null}):t),i.length>0&&API_URL_MANUT&&i.forEach(async e=>{try{await fetch(`${API_URL_MANUT}/api/upload`,{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify(e)}),console.log("✅ Arquivo deletado do Cloudinary:",e.publicId)}catch(e){console.error("Erro ao deletar arquivo do Cloudinary:",e)}}),saveContractsToStorage(),renderContractsList();const c=(new Blob([JSON.stringify(contracts)]).size/1048576).toFixed(2);showToast(`${s} arquivos removidos com sucesso! Armazenamento local: ${c}MB`,"success")}function renewContract(e){console.log("=== RENOVANDO CONTRATO ==="),console.log("ID:",e);const t=contracts.find(t=>t.id===e);if(!t)return void console.error("Contrato não encontrado");if(console.log("Contrato encontrado:",t.company),console.log("Campo renewed:",t.renewed),t.renewed)return console.warn("Contrato já foi renovado anteriormente"),void showToast("Este contrato já foi renovado!","warning");const n=new Date(t.endDate),a=new Date(n);a.setDate(a.getDate()+1);const o=new Date(a);o.setFullYear(o.getFullYear()+1);const r=`Renovar contrato com ${t.company}?\n\nNova vigência:\nInício: ${formatDate(a.toISOString().split("T")[0])}\nFim: ${formatDate(o.toISOString().split("T")[0])}`;if(!confirm(r))return;const s=contracts.findIndex(t=>t.id===e);console.log("Marcando contrato como renovado, índice:",s),contracts[s].renewed=!0;const i={...t,id:Date.now().toString(),startDate:a.toISOString().split("T")[0],endDate:o.toISOString().split("T")[0],createdAt:(new Date).toISOString(),renewed:!1};console.log("Novo contrato criado:",i),contracts.push(i),saveContractsToStorage(),renderContractsList(),updateContractsDashboard(),showToast("Contrato renovado com sucesso!","success"),console.log("=== RENOVAÇÃO CONCLUÍDA ===")}async function exportContractsToPDF(){const{jsPDF:e}=window.jspdf,t=new e,n=t.internal.pageSize.getWidth(),a=t.internal.pageSize.getHeight(),o=15;let r=o;t.setFontSize(18),t.setTextColor(44,62,80),t.text("Relatório de Contratos de Manutenção",o,r),r+=10,t.setFontSize(10),t.setTextColor(127,140,141),t.text(`Gerado em: ${(new Date).toLocaleDateString("pt-BR")} às ${(new Date).toLocaleTimeString("pt-BR")}`,o,r),r+=10;const s=new Date;s.setHours(0,0,0,0);const i=contracts.reduce((e,t)=>e+t.cost,0),c=contracts.filter(e=>new Date(e.endDate)>=s).length;t.setFontSize(11),t.setTextColor(44,62,80),t.text(`Total de Contratos: ${contracts.length}`,o,r),r+=6,t.text(`Contratos Ativos: ${c}`,o,r),r+=6,t.text(`Custo Mensal Total: ${i.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}`,o,r),r+=12,t.setDrawColor(189,195,199),t.line(o,r,n-o,r),r+=10;const l=allContracts.length>0?allContracts:contracts;for(let e=0;e<l.length;e++){const i=l[e];r>a-60&&(t.addPage(),r=o);const c=new Date(i.endDate),d=Math.ceil((c-s)/864e5);let u="Ativo",m=[39,174,96];if(d<0?(u="Vencido",m=[231,76,60]):d<=30&&(u="A Vencer",m=[243,156,18]),t.setFontSize(12),t.setFont(void 0,"bold"),t.setTextColor(44,62,80),t.text(`${e+1}. ${i.company}`,o,r),t.setFontSize(9),t.setFont(void 0,"normal"),t.setTextColor(...m),t.text(`[${u}]`,115,r),r+=6,t.setFontSize(9),t.setTextColor(127,140,141),i.responsible&&(t.text(`Responsável: ${i.responsible}`,20,r),r+=5),i.phone&&(t.text(`Telefone: ${i.phone}`,20,r),r+=5),t.text(`Vigência: ${formatDate(i.startDate)} a ${formatDate(i.endDate)}`,20,r),r+=5,t.text(`Custo Mensal: ${i.cost.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}`,20,r),r+=5,i.description){const e=t.splitTextToSize(`Descrição: ${i.description}`,n-30-10);t.text(e,20,r),r+=5*e.length}r+=8}const d=t.internal.getNumberOfPages();for(let e=1;e<=d;e++)t.setPage(e),t.setFontSize(8),t.setTextColor(149,165,166),t.text(`Página ${e} de ${d}`,n-o-30,a-10),t.text("Sistema de Gestão Casa DW",o,a-10);t.save(`contratos_manutencao_${(new Date).toISOString().split("T")[0]}.pdf`),showToast("PDF exportado com sucesso!","success")}function checkContractAlerts(){const e=new Date;e.setHours(0,0,0,0);const t=new Date(e);t.setDate(t.getDate()+30);const n=contracts.filter(n=>{const a=new Date(n.endDate);return a>=e&&a<=t}),a=contracts.filter(t=>new Date(t.endDate)<e);if(a.length>0||n.length>0){let e="";a.length>0&&(e+=`⚠️ ${a.length} contrato(s) vencido(s)!\n`),n.length>0&&(e+=`⏰ ${n.length} contrato(s) vence(m) em até 30 dias!`),setTimeout(()=>{showToast(e,"warning")},1e3)}}
+// ===== DASHBOARD DE MANUTENÇÕES (Charts) =====
+var _chartManutTipo=null,_chartManutArea=null,_chartManutEvolucao=null,_chartManutStatus=null,_chartManutRecorrente=null;
+var MANUT_MONTHS=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+var MANUT_COLORS=["#667eea","#11998e","#e74c3c","#f39c12","#9b59b6","#3498db","#1abc9c","#e67e22","#2ecc71","#c0392b","#8e44ad","#16a085","#d35400","#27ae60","#2980b9"];
 
-const API_URL_MANUT = window.APP_CONFIG?.API_URL || null;
-
-let maintenances = [];
-let maintenanceTypes = []; // lista gerenciada de tipos
-let maintenanceAreas = []; // lista gerenciada de áreas
-let calendarDate = new Date();
-let editingId = null;
-let viewingId = null;
-let pendingFiles = [];
-
-// Defaults se não houver nenhum salvo
-const DEFAULT_TYPES = ['Pintura', 'Hidráulica', 'Elétrica', 'Ar-condicionado', 'Dedetização', 'Limpeza', 'Reforma', 'Manutenção preventiva', 'Instalação', 'Reparo'];
-const DEFAULT_AREAS = ['Sala', 'Cozinha', 'Banheiro', 'Quarto', 'Garagem', 'Área externa', 'Piscina', 'Jardim', 'Lavanderia', 'Escritório', 'Geral'];
-
-// ===== INIT =====
-document.addEventListener('DOMContentLoaded', async function() {
-    await loadData();
-    updateDashboard();
-    renderAlerts();
-    renderCalendar();
-    renderTable();
-    populateFilterOptions();
-    setDefaultDate();
-    renderTypesList();
-    renderAreasList();
-    console.log('✅ Manutenções carregadas');
-});
-
-function setDefaultDate() {
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('manutDate').value = today;
+function initDashManutYears(){
+    var sel=document.getElementById("dashManutYear");
+    if(!sel)return;
+    var years={};
+    maintenances.forEach(function(m){if(m.date){var y=parseInt(m.date.substring(0,4));if(y)years[y]=1;}});
+    var arr=Object.keys(years).sort(function(a,b){return b-a;});
+    if(arr.length===0)arr=[(new Date).getFullYear()];
+    sel.innerHTML="";
+    arr.forEach(function(y){var o=document.createElement("option");o.value=y;o.textContent=y;sel.appendChild(o);});
+    sel.value=arr[0];
 }
 
-// ===== DATA LOAD/SAVE =====
-async function loadData() {
-    try {
-        const userId = sessionStorage.getItem('user-id');
-        if (!userId || !API_URL_MANUT) {
-            console.warn('⚠️ Sem userId ou API_URL — usando dados locais');
-            maintenances = JSON.parse(sessionStorage.getItem('manut_local') || '[]');
-            maintenanceTypes = JSON.parse(sessionStorage.getItem('manut_types') || 'null') || [...DEFAULT_TYPES];
-            maintenanceAreas = JSON.parse(sessionStorage.getItem('manut_areas') || 'null') || [...DEFAULT_AREAS];
-            return;
-        }
+function updateManutDashboard(){
+    if(typeof Chart==="undefined")return;
+    initDashManutYears();
+    var selYear=document.getElementById("dashManutYear");
+    var year=selYear?parseInt(selYear.value):(new Date).getFullYear();
+    var filtered=maintenances.filter(function(m){return m.date&&parseInt(m.date.substring(0,4))===year;});
 
-        const response = await fetch(`${API_URL_MANUT}/api/sync/${userId}`);
-        if (!response.ok) throw new Error('Erro na API');
+    // KPIs
+    var total=filtered.length;
+    var concluidas=0,gastoAno=0;
+    filtered.forEach(function(m){
+        var st=getEffectiveStatus(m);
+        if(st==="concluida")concluidas++;
+        if(m.cost)gastoAno+=parseFloat(m.cost)||0;
+    });
+    var taxa=total>0?Math.round((concluidas/total)*100):0;
+    document.getElementById("kpiTotalManut").textContent=total;
+    document.getElementById("kpiConcluidas").textContent=concluidas;
+    document.getElementById("kpiGastoAno").textContent=formatMoney(gastoAno);
+    document.getElementById("kpiTaxaCumprimento").textContent=taxa+"%";
 
-        const data = await response.json();
-        maintenances = data.maintenance || [];
-        maintenanceTypes = (data.maintenanceTypes && data.maintenanceTypes.length > 0)
-            ? data.maintenanceTypes
-            : [...DEFAULT_TYPES];
-        maintenanceAreas = (data.maintenanceAreas && data.maintenanceAreas.length > 0)
-            ? data.maintenanceAreas
-            : [...DEFAULT_AREAS];
-
-        console.log(`✅ ${maintenances.length} manutenções, ${maintenanceTypes.length} tipos, ${maintenanceAreas.length} áreas carregados`);
-    } catch (error) {
-        console.error('❌ Erro ao carregar:', error);
-        maintenances = [];
-        maintenanceTypes = [...DEFAULT_TYPES];
-        maintenanceAreas = [...DEFAULT_AREAS];
-    }
-}
-
-async function saveMaintenances() {
-    return saveToAPI({ maintenance: maintenances });
-}
-
-async function saveTypes() {
-    return saveToAPI({ maintenanceTypes });
-}
-
-async function saveAreas() {
-    return saveToAPI({ maintenanceAreas });
-}
-
-async function saveToAPI(payload) {
-    try {
-        const userId = sessionStorage.getItem('user-id');
-        if (!userId || !API_URL_MANUT) {
-            if (payload.maintenance !== undefined) sessionStorage.setItem('manut_local', JSON.stringify(maintenances));
-            if (payload.maintenanceTypes !== undefined) sessionStorage.setItem('manut_types', JSON.stringify(maintenanceTypes));
-            if (payload.maintenanceAreas !== undefined) sessionStorage.setItem('manut_areas', JSON.stringify(maintenanceAreas));
-            return true;
-        }
-
-        const response = await fetch(`${API_URL_MANUT}/api/sync`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId, ...payload })
+    // 1. Gastos por Tipo (Doughnut)
+    var tipoMap={};
+    filtered.forEach(function(m){if(m.cost&&m.cost>0){tipoMap[m.type]=(tipoMap[m.type]||0)+parseFloat(m.cost);}});
+    var tipoLabels=Object.keys(tipoMap).sort(function(a,b){return tipoMap[b]-tipoMap[a];});
+    var tipoData=tipoLabels.map(function(k){return tipoMap[k];});
+    if(_chartManutTipo)_chartManutTipo.destroy();
+    var ctxTipo=document.getElementById("chartManutTipo");
+    if(ctxTipo){
+        _chartManutTipo=new Chart(ctxTipo,{
+            type:"doughnut",
+            data:{labels:tipoLabels,datasets:[{data:tipoData,backgroundColor:MANUT_COLORS.slice(0,tipoLabels.length),borderWidth:2,borderColor:"#fff"}]},
+            options:{responsive:true,plugins:{legend:{position:"right",labels:{font:{size:11}}},tooltip:{callbacks:{label:function(c){return c.label+": "+formatMoney(c.raw);}}}}}
         });
-
-        if (response.ok) return true;
-        console.error('❌ Erro ao salvar:', response.status);
-        return false;
-    } catch (error) {
-        console.error('❌ Erro ao salvar:', error);
-        return false;
-    }
-}
-
-// ===== STATUS LOGIC =====
-function getEffectiveStatus(m) {
-    if (m.status === 'concluida') return 'concluida';
-    if (m.status === 'em_andamento') return 'em_andamento';
-    if (m.nextDate) {
-        const next = new Date(m.nextDate);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        if (next < today) return 'vencida';
-    }
-    return m.status || 'pendente';
-}
-
-function statusLabel(s) {
-    return { pendente: 'Pendente', em_andamento: 'Em Andamento', concluida: 'Concluída', vencida: 'Vencida' }[s] || s;
-}
-
-// ===== DASHBOARD =====
-function updateDashboard() {
-    const currentYear = new Date().getFullYear();
-    let total = maintenances.length;
-    let pending = 0, done = 0, overdue = 0, cost = 0;
-
-    maintenances.forEach(m => {
-        const s = getEffectiveStatus(m);
-        if (s === 'concluida') done++;
-        else if (s === 'vencida') overdue++;
-        else pending++;
-
-        const execYear = m.date ? parseInt(m.date.substring(0, 4)) : null;
-        if (execYear === currentYear && m.cost) {
-            cost += parseFloat(m.cost || 0);
-        }
-    });
-
-    document.getElementById('cardTotal').textContent = total;
-    document.getElementById('cardPending').textContent = pending;
-    document.getElementById('cardOverdue').textContent = overdue;
-    document.getElementById('cardDone').textContent = done;
-    document.getElementById('cardCost').textContent = 'R$ ' + cost.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-}
-
-// ===== ALERTS =====
-function renderAlerts() {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const in30 = new Date(today);
-    in30.setDate(in30.getDate() + 30);
-
-    const overdue = [];
-    const soon = [];
-
-    maintenances.forEach(m => {
-        if (m.status === 'concluida') return;
-        if (!m.nextDate) return;
-        const next = new Date(m.nextDate);
-        if (next < today) overdue.push(m);
-        else if (next <= in30) soon.push(m);
-    });
-
-    const section = document.getElementById('alertsSection');
-    const list = document.getElementById('alertsList');
-
-    if (overdue.length === 0 && soon.length === 0) {
-        section.style.display = 'none';
-        return;
     }
 
-    section.style.display = 'block';
-    let html = '';
-
-    overdue.forEach(m => {
-        html += `
-            <div class="alert-item">
-                <div class="alert-icon overdue"><i class="fas fa-exclamation-triangle"></i></div>
-                <div class="alert-info">
-                    <strong>${m.type} — ${m.area}</strong>
-                    <small>Próxima manutenção vencida em ${formatDate(m.nextDate)} · ${m.supplier || 'Sem fornecedor'}</small>
-                </div>
-                <button class="btn btn-secondary" style="margin-left:auto;font-size:12px;" onclick="openEditModal('${m.id}')">Editar</button>
-            </div>`;
-    });
-
-    soon.forEach(m => {
-        const days = Math.ceil((new Date(m.nextDate) - today) / 86400000);
-        html += `
-            <div class="alert-item">
-                <div class="alert-icon soon"><i class="fas fa-clock"></i></div>
-                <div class="alert-info">
-                    <strong>${m.type} — ${m.area}</strong>
-                    <small>Próxima previsão em ${days} dia(s) — ${formatDate(m.nextDate)} · ${m.supplier || 'Sem fornecedor'}</small>
-                </div>
-            </div>`;
-    });
-
-    list.innerHTML = html;
-}
-
-// ===== CALENDAR — somente data de execução =====
-function renderCalendar() {
-    const year = calendarDate.getFullYear();
-    const month = calendarDate.getMonth();
-
-    const MONTH_NAMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-                         'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-
-    document.getElementById('calendarTitle').textContent = `${MONTH_NAMES[month]} ${year}`;
-
-    const grid = document.getElementById('calendarGrid');
-    const days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-    let html = days.map(d => `<div class="calendar-header">${d}</div>`).join('');
-
-    const firstDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const daysInPrev = new Date(year, month, 0).getDate();
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    // Indexar eventos pela data de EXECUÇÃO apenas
-    const eventsMap = {};
-    maintenances.forEach(m => {
-        if (!m.date) return;
-        // Usar new Date com timezone local para evitar off-by-one
-        const parts = m.date.split('-');
-        const execYear = parseInt(parts[0]);
-        const execMonth = parseInt(parts[1]) - 1;
-        const execDay = parseInt(parts[2]);
-
-        if (execYear === year && execMonth === month) {
-            if (!eventsMap[execDay]) eventsMap[execDay] = [];
-            eventsMap[execDay].push(m);
-        }
-    });
-
-    // Dias do mês anterior
-    for (let i = firstDay - 1; i >= 0; i--) {
-        html += `<div class="calendar-day other-month"><div class="calendar-day-num">${daysInPrev - i}</div></div>`;
-    }
-
-    for (let day = 1; day <= daysInMonth; day++) {
-        const date = new Date(year, month, day);
-        const isToday = date.getTime() === today.getTime();
-        let eventsHtml = '';
-
-        if (eventsMap[day]) {
-            eventsMap[day].slice(0, 3).forEach(m => {
-                const s = getEffectiveStatus(m);
-                eventsHtml += `<div class="calendar-event status-${s}" title="${m.type} — ${m.area}" onclick="openViewModal('${m.id}')">
-                    <i class="fas fa-tools" style="font-size:9px;"></i> ${m.type}
-                </div>`;
-            });
-            if (eventsMap[day].length > 3) {
-                eventsHtml += `<div style="font-size:10px;color:#999;padding:1px 4px;">+${eventsMap[day].length - 3} mais</div>`;
-            }
-        }
-
-        html += `<div class="calendar-day${isToday ? ' today' : ''}">
-            <div class="calendar-day-num">${day}</div>
-            ${eventsHtml}
-        </div>`;
-    }
-
-    // Dias do próximo mês
-    const totalCells = firstDay + daysInMonth;
-    const remaining = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
-    for (let i = 1; i <= remaining; i++) {
-        html += `<div class="calendar-day other-month"><div class="calendar-day-num">${i}</div></div>`;
-    }
-
-    grid.innerHTML = html;
-}
-
-function changeMonth(dir) {
-    calendarDate.setMonth(calendarDate.getMonth() + dir);
-    renderCalendar();
-}
-
-// ===== TABLE =====
-function renderTable() {
-    const statusF = document.getElementById('filterStatus').value;
-    const areaF = document.getElementById('filterArea').value;
-    const typeF = document.getElementById('filterType').value;
-    const searchF = document.getElementById('filterSearch').value.toLowerCase();
-    const dateFromF = document.getElementById('filterDateFrom').value;
-    const dateToF = document.getElementById('filterDateTo').value;
-
-    let filtered = maintenances.filter(m => {
-        const s = getEffectiveStatus(m);
-        if (statusF && s !== statusF) return false;
-        if (areaF && m.area !== areaF) return false;
-        if (typeF && m.type !== typeF) return false;
-        if (searchF) {
-            const text = `${m.type} ${m.area} ${m.supplier} ${m.desc}`.toLowerCase();
-            if (!text.includes(searchF)) return false;
-        }
-
-        // Filtro por período (data de execução)
-        if (dateFromF && m.date && m.date < dateFromF) return false;
-        if (dateToF && m.date && m.date > dateToF) return false;
-
-        return true;
-    });
-
-    filtered.sort((a, b) => {
-        const na = a.date || '';
-        const nb = b.date || '';
-        return nb.localeCompare(na); // mais recente primeiro
-    });
-
-    const tbody = document.getElementById('manutTableBody');
-
-    if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" class="no-data">
-            <i class="fas fa-tools" style="font-size:40px;margin-bottom:10px;display:block;"></i>
-            <p>Nenhuma manutenção encontrada.</p>
-        </td></tr>`;
-        return;
-    }
-
-    tbody.innerHTML = filtered.map(m => {
-        const s = getEffectiveStatus(m);
-        const cost = m.cost ? 'R$ ' + parseFloat(m.cost).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '-';
-        return `<tr>
-            <td><strong>${m.type}</strong>${m.recurring === 'sim' ? ' <span title="Recorrente" style="color:#3498db;font-size:11px;">↻</span>' : ''}</td>
-            <td>${m.area}</td>
-            <td>${m.supplier || '-'}</td>
-            <td>${formatDate(m.date)}</td>
-            <td>${formatDate(m.nextDate)}</td>
-            <td>${cost}</td>
-            <td><span class="status-badge ${s}">${statusLabel(s)}</span></td>
-            <td>
-                <button class="action-btn view" onclick="openViewModal('${m.id}')"><i class="fas fa-eye"></i></button>
-                <button class="action-btn edit" onclick="openEditModal('${m.id}')"><i class="fas fa-edit"></i></button>
-                <button class="action-btn delete" onclick="deleteManut('${m.id}')"><i class="fas fa-trash"></i></button>
-            </td>
-        </tr>`;
-    }).join('');
-}
-
-function populateFilterOptions() {
-    // Reset e repopula filtros
-    const areaSelect = document.getElementById('filterArea');
-    areaSelect.innerHTML = '<option value="">Todas as Áreas</option>';
-    maintenanceAreas.sort().forEach(a => {
-        const opt = document.createElement('option');
-        opt.value = a; opt.textContent = a;
-        areaSelect.appendChild(opt);
-    });
-
-    const typeSelect = document.getElementById('filterType');
-    typeSelect.innerHTML = '<option value="">Todos os Tipos</option>';
-    maintenanceTypes.sort().forEach(t => {
-        const opt = document.createElement('option');
-        opt.value = t; opt.textContent = t;
-        typeSelect.appendChild(opt);
-    });
-
-    // Datalists para o formulário
-    document.getElementById('areasList').innerHTML = maintenanceAreas.sort().map(a => `<option value="${a}">`).join('');
-    document.getElementById('typesList').innerHTML = maintenanceTypes.sort().map(t => `<option value="${t}">`).join('');
-}
-
-function clearDateFilters() {
-    document.getElementById('filterDateFrom').value = '';
-    document.getElementById('filterDateTo').value = '';
-    renderTable();
-}
-
-// ===== TABS =====
-function switchTab(tab, btn) {
-    document.querySelectorAll('.manut-tab').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.manut-panel').forEach(p => p.classList.remove('active'));
-    const tabMap = { agenda: 'tabAgenda', lista: 'tabLista', tipos: 'tabTipos', areas: 'tabAreas' };
-    document.getElementById(tabMap[tab]).classList.add('active');
-    btn.classList.add('active');
-}
-
-// ===== MODAL: NOVA/EDITAR MANUTENÇÃO =====
-function openManutModal() {
-    editingId = null;
-    pendingFiles = [];
-    document.getElementById('modalTitle').textContent = 'Nova Manutenção';
-    document.getElementById('manutForm').reset();
-    document.getElementById('manutId').value = '';
-    document.getElementById('uploadPreview').innerHTML = '';
-    document.getElementById('recurrenceFields').classList.remove('visible');
-    setDefaultDate();
-    document.getElementById('manutModal').classList.add('active');
-}
-
-function openEditModal(id) {
-    const m = maintenances.find(x => x.id === id);
-    if (!m) return;
-
-    editingId = id;
-    pendingFiles = [];
-    document.getElementById('modalTitle').textContent = 'Editar Manutenção';
-    document.getElementById('manutId').value = m.id;
-    document.getElementById('manutType').value = m.type || '';
-    document.getElementById('manutArea').value = m.area || '';
-    document.getElementById('manutSupplier').value = m.supplier || '';
-    document.getElementById('manutDate').value = m.date || '';
-    document.getElementById('manutNextDate').value = m.nextDate || '';
-    document.getElementById('manutCost').value = m.cost || '';
-    document.getElementById('manutStatus').value = m.status || 'pendente';
-    document.getElementById('manutRecurring').value = m.recurring || 'nao';
-    document.getElementById('manutPeriod').value = m.period || '365';
-    document.getElementById('manutDesc').value = m.desc || '';
-    document.getElementById('manutLaunchExpense').value = m.launchExpense || 'nao';
-
-    renderExistingFiles(m.files || []);
-
-    const recFields = document.getElementById('recurrenceFields');
-    if (m.recurring === 'sim') recFields.classList.add('visible');
-    else recFields.classList.remove('visible');
-
-    document.getElementById('manutModal').classList.add('active');
-}
-
-function renderExistingFiles(files) {
-    const preview = document.getElementById('uploadPreview');
-    preview.innerHTML = files.map((f, i) => {
-        const isImage = f.url && /\.(jpg|jpeg|png|gif|webp)/i.test(f.url);
-        if (isImage) {
-            return `<div class="upload-preview-item">
-                <img src="${f.url}" alt="${f.name}" onclick="window.open('${f.url}','_blank')">
-                <button class="remove-file" onclick="removeExistingFile(${i})" title="Remover">×</button>
-                <div class="file-name">${f.name}</div>
-            </div>`;
-        } else {
-            return `<div class="upload-preview-item">
-                <a href="${f.url}" target="_blank"><i class="fas fa-file-pdf"></i> ${f.name}</a>
-                <button class="remove-file" onclick="removeExistingFile(${i})" title="Remover" style="top:-3px;right:-3px;">×</button>
-            </div>`;
-        }
-    }).join('');
-}
-
-function removeExistingFile(index) {
-    if (!editingId) return;
-    const m = maintenances.find(x => x.id === editingId);
-    if (m && m.files) {
-        m.files.splice(index, 1);
-        renderExistingFiles(m.files);
-    }
-}
-
-function closeManutModal() {
-    document.getElementById('manutModal').classList.remove('active');
-    pendingFiles = [];
-    editingId = null;
-}
-
-function toggleRecurrence() {
-    const val = document.getElementById('manutRecurring').value;
-    const fields = document.getElementById('recurrenceFields');
-    if (val === 'sim') {
-        fields.classList.add('visible');
-        autoCalcNextDate();
-    } else {
-        fields.classList.remove('visible');
-    }
-}
-
-function autoCalcNextDate() {
-    const dateVal = document.getElementById('manutDate').value;
-    const period = parseInt(document.getElementById('manutPeriod').value || '365');
-    if (!dateVal) return;
-    const d = new Date(dateVal);
-    d.setDate(d.getDate() + period);
-    document.getElementById('manutNextDate').value = d.toISOString().split('T')[0];
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    document.getElementById('manutDate')?.addEventListener('change', function() {
-        if (document.getElementById('manutRecurring').value === 'sim') autoCalcNextDate();
-    });
-    document.getElementById('manutPeriod')?.addEventListener('change', autoCalcNextDate);
-});
-
-// ===== FILE UPLOAD =====
-function handleFileSelect(event) {
-    Array.from(event.target.files).forEach(file => pendingFiles.push(file));
-    renderPendingFiles();
-    event.target.value = '';
-}
-
-function renderPendingFiles() {
-    const preview = document.getElementById('uploadPreview');
-    preview.querySelectorAll('[data-pending]').forEach(el => el.remove());
-
-    const html = pendingFiles.map((f, i) => {
-        const isImage = f.type.startsWith('image/');
-        if (isImage) {
-            const url = URL.createObjectURL(f);
-            return `<div class="upload-preview-item" data-pending="${i}">
-                <img src="${url}" alt="${f.name}">
-                <button class="remove-file" onclick="removePendingFile(${i})">×</button>
-                <div class="file-name">${f.name}</div>
-            </div>`;
-        } else {
-            return `<div class="upload-preview-item" data-pending="${i}">
-                <div style="padding:8px;background:#f5f5f5;border-radius:5px;font-size:12px;max-width:70px;word-break:break-all;">
-                    <i class="fas fa-file-pdf" style="color:#e74c3c;"></i><br>${f.name}
-                </div>
-                <button class="remove-file" onclick="removePendingFile(${i})">×</button>
-            </div>`;
-        }
-    });
-
-    preview.insertAdjacentHTML('beforeend', html.join(''));
-}
-
-function removePendingFile(index) {
-    pendingFiles.splice(index, 1);
-    renderPendingFiles();
-}
-
-async function uploadPendingFiles(userId) {
-    const uploaded = [];
-    for (const file of pendingFiles) {
-        try {
-            const base64 = await fileToBase64(file);
-            const response = await fetch(`${API_URL_MANUT}/api/upload`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ file: base64, filename: file.name, userId })
-            });
-            const result = await response.json();
-            if (result.success) uploaded.push({ name: file.name, url: result.url, publicId: result.publicId });
-        } catch (err) {
-            console.error('Erro ao enviar arquivo:', err);
-        }
-    }
-    return uploaded;
-}
-
-function fileToBase64(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = e => resolve(e.target.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-    });
-}
-
-// ===== SAVE MANUTENÇÃO =====
-async function saveManut(event) {
-    event.preventDefault();
-
-    const saveBtn = document.getElementById('saveBtn');
-    saveBtn.disabled = true;
-    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
-
-    try {
-        const userId = sessionStorage.getItem('user-id') || 'admin';
-
-        let newFiles = [];
-        if (pendingFiles.length > 0 && API_URL_MANUT) {
-            showToast('Enviando arquivos...', 'warning');
-            newFiles = await uploadPendingFiles(userId);
-        }
-
-        const id = editingId || generateId();
-        const type = document.getElementById('manutType').value.trim();
-        const area = document.getElementById('manutArea').value.trim();
-        const supplier = document.getElementById('manutSupplier').value.trim();
-        const date = document.getElementById('manutDate').value;
-        const nextDate = document.getElementById('manutNextDate').value;
-        const cost = document.getElementById('manutCost').value;
-        const status = document.getElementById('manutStatus').value;
-        const recurring = document.getElementById('manutRecurring').value;
-        const period = document.getElementById('manutPeriod').value;
-        const desc = document.getElementById('manutDesc').value.trim();
-        const launchExpense = document.getElementById('manutLaunchExpense').value;
-
-        let existingFiles = [];
-        if (editingId) {
-            const existing = maintenances.find(x => x.id === editingId);
-            existingFiles = existing?.files || [];
-        }
-
-        const record = {
-            id,
-            type,
-            area,
-            supplier,
-            date,
-            nextDate,
-            cost: cost ? parseFloat(cost) : null,
-            status,
-            recurring,
-            period: recurring === 'sim' ? period : null,
-            desc,
-            launchExpense,
-            files: [...existingFiles, ...newFiles],
-            updatedAt: new Date().toISOString()
-        };
-
-        if (editingId) {
-            const idx = maintenances.findIndex(x => x.id === editingId);
-            record.createdAt = maintenances[idx].createdAt;
-            maintenances[idx] = record;
-        } else {
-            record.createdAt = new Date().toISOString();
-            maintenances.push(record);
-        }
-
-        if (launchExpense === 'sim' && cost && parseFloat(cost) > 0) {
-            await launchAsExpense(record, userId);
-        }
-
-        const saved = await saveMaintenances();
-
-        if (saved) {
-            showToast(editingId ? 'Manutenção atualizada!' : 'Manutenção cadastrada!', 'success');
-            closeManutModal();
-            updateDashboard();
-            renderAlerts();
-            renderCalendar();
-            renderTable();
-            populateFilterOptions();
-        } else {
-            showToast('Erro ao salvar. Tente novamente.', 'error');
-        }
-    } catch (err) {
-        console.error('Erro ao salvar manutenção:', err);
-        showToast('Erro ao salvar.', 'error');
-    } finally {
-        saveBtn.disabled = false;
-        saveBtn.innerHTML = '<i class="fas fa-save"></i> Salvar';
-        pendingFiles = [];
-    }
-}
-
-async function launchAsExpense(record, userId) {
-    try {
-        const resp = await fetch(`${API_URL_MANUT}/api/sync/${userId}`);
-        const data = await resp.json();
-
-        const monthIndex = record.date ? parseInt(record.date.substring(5, 7)) - 1 : new Date().getMonth();
-        const expensesByMonth = {};
-        for (let i = 0; i < 12; i++) expensesByMonth[i] = [];
-
-        if (data.expenses && Array.isArray(data.expenses)) {
-            data.expenses.forEach(exp => {
-                (exp.items || []).forEach(item => {
-                    expensesByMonth[exp.month] = expensesByMonth[exp.month] || [];
-                    expensesByMonth[exp.month].push({
-                        ...item,
-                        year: item.date ? parseInt(item.date.substring(0, 4)) : exp.year
-                    });
-                });
-            });
-        }
-
-        expensesByMonth[monthIndex].push({
-            id: generateId(),
-            date: record.date,
-            category: 'Manutenção',
-            supplier: record.supplier || record.type,
-            description: `Manutenção: ${record.type} — ${record.area}`,
-            paymentMethod: 'Conta Corrente',
-            amount: record.cost,
-            year: record.date ? parseInt(record.date.substring(0, 4)) : new Date().getFullYear()
+    // 2. Gastos por Área (Bar horizontal)
+    var areaMap={};
+    filtered.forEach(function(m){if(m.cost&&m.cost>0){areaMap[m.area]=(areaMap[m.area]||0)+parseFloat(m.cost);}});
+    var areaLabels=Object.keys(areaMap).sort(function(a,b){return areaMap[b]-areaMap[a];});
+    var areaData=areaLabels.map(function(k){return areaMap[k];});
+    if(_chartManutArea)_chartManutArea.destroy();
+    var ctxArea=document.getElementById("chartManutArea");
+    if(ctxArea){
+        _chartManutArea=new Chart(ctxArea,{
+            type:"bar",
+            data:{labels:areaLabels,datasets:[{label:"Gasto (R$)",data:areaData,backgroundColor:"rgba(17,153,142,0.7)",borderColor:"#11998e",borderWidth:1}]},
+            options:{indexAxis:"y",responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return formatMoney(c.raw);}}}},scales:{x:{ticks:{callback:function(v){return"R$ "+v.toLocaleString("pt-BR");}}}}}
         });
+    }
 
-        const expensesAPI = [];
-        for (let i = 0; i < 12; i++) {
-            if (expensesByMonth[i] && expensesByMonth[i].length > 0) {
-                const byYear = {};
-                expensesByMonth[i].forEach(item => {
-                    const y = item.year || new Date().getFullYear();
-                    if (!byYear[y]) byYear[y] = [];
-                    byYear[y].push(item);
-                });
-                Object.entries(byYear).forEach(([year, items]) => {
-                    expensesAPI.push({ month: i, year: parseInt(year), items });
-                });
-            }
-        }
-
-        await fetch(`${API_URL_MANUT}/api/sync`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId, expenses: expensesAPI })
+    // 3. Evolução Mensal (Line)
+    var monthData=new Array(12).fill(0);
+    filtered.forEach(function(m){if(m.cost&&m.cost>0&&m.date){var mo=parseInt(m.date.substring(5,7))-1;if(mo>=0&&mo<12)monthData[mo]+=parseFloat(m.cost);}});
+    if(_chartManutEvolucao)_chartManutEvolucao.destroy();
+    var ctxEvo=document.getElementById("chartManutEvolucao");
+    if(ctxEvo){
+        _chartManutEvolucao=new Chart(ctxEvo,{
+            type:"line",
+            data:{labels:MANUT_MONTHS,datasets:[{label:"Gasto Mensal (R$)",data:monthData,borderColor:"#e74c3c",backgroundColor:"rgba(231,76,60,0.1)",fill:true,tension:0.3,pointRadius:4,pointBackgroundColor:"#e74c3c"}]},
+            options:{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return formatMoney(c.raw);}}}},scales:{y:{ticks:{callback:function(v){return"R$ "+v.toLocaleString("pt-BR");}}}}}
         });
-
-        showToast('Despesa lançada automaticamente!', 'success');
-    } catch (err) {
-        console.error('Erro ao lançar despesa:', err);
-    }
-}
-
-// ===== DELETE MANUTENÇÃO =====
-async function deleteManut(id) {
-    if (!confirm('Deseja excluir esta manutenção?')) return;
-    maintenances = maintenances.filter(m => m.id !== id);
-    await saveMaintenances();
-    updateDashboard();
-    renderAlerts();
-    renderCalendar();
-    renderTable();
-    populateFilterOptions();
-    showToast('Manutenção excluída.', 'success');
-}
-
-// ===== VIEW MODAL =====
-function openViewModal(id) {
-    const m = maintenances.find(x => x.id === id);
-    if (!m) return;
-    viewingId = id;
-
-    const s = getEffectiveStatus(m);
-
-    let filesHtml = '';
-    if (m.files && m.files.length > 0) {
-        filesHtml = '<div class="photo-list">' + m.files.map(f => {
-            const isImage = /\.(jpg|jpeg|png|gif|webp)/i.test(f.url);
-            if (isImage) {
-                return `<div class="photo-item"><img src="${f.url}" alt="${f.name}" onclick="window.open('${f.url}','_blank')" title="${f.name}"></div>`;
-            } else {
-                return `<div class="photo-item"><a href="${f.url}" target="_blank"><i class="fas fa-file-pdf"></i> ${f.name}</a></div>`;
-            }
-        }).join('') + '</div>';
-    } else {
-        filesHtml = '<span style="color:#999;font-size:13px;">Nenhum arquivo</span>';
     }
 
-    document.getElementById('viewContent').innerHTML = `
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 20px;">
-            <div><strong style="color:#7f8c8d;font-size:12px;">TIPO</strong><br>${m.type}</div>
-            <div><strong style="color:#7f8c8d;font-size:12px;">ÁREA/CÔMODO</strong><br>${m.area}</div>
-            <div><strong style="color:#7f8c8d;font-size:12px;">FORNECEDOR</strong><br>${m.supplier || '-'}</div>
-            <div><strong style="color:#7f8c8d;font-size:12px;">STATUS</strong><br><span class="status-badge ${s}">${statusLabel(s)}</span></div>
-            <div><strong style="color:#7f8c8d;font-size:12px;">DATA DE EXECUÇÃO</strong><br>${formatDate(m.date)}</div>
-            <div><strong style="color:#7f8c8d;font-size:12px;">PRÓXIMA PREVISÃO</strong><br>${formatDate(m.nextDate) || '-'}</div>
-            <div><strong style="color:#7f8c8d;font-size:12px;">CUSTO</strong><br>${m.cost ? 'R$ ' + parseFloat(m.cost).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '-'}</div>
-            <div><strong style="color:#7f8c8d;font-size:12px;">RECORRENTE</strong><br>${m.recurring === 'sim' ? 'Sim (' + periodLabel(m.period) + ')' : 'Não'}</div>
-            ${m.desc ? `<div style="grid-column:1/-1;"><strong style="color:#7f8c8d;font-size:12px;">DESCRIÇÃO</strong><br>${m.desc}</div>` : ''}
-            <div style="grid-column:1/-1;"><strong style="color:#7f8c8d;font-size:12px;">FOTOS / DOCUMENTOS</strong><br>${filesHtml}</div>
-        </div>
-    `;
-    document.getElementById('viewModal').classList.add('active');
-}
-
-function closeViewModal() {
-    document.getElementById('viewModal').classList.remove('active');
-    viewingId = null;
-}
-
-function editFromView() {
-    const id = viewingId;
-    closeViewModal();
-    if (id) openEditModal(id);
-}
-
-// ===== TIPOS DE MANUTENÇÃO — CRUD =====
-function renderTypesList() {
-    const tbody = document.getElementById('typesTableBody');
-    if (!tbody) return;
-
-    const sorted = [...maintenanceTypes].sort((a, b) => a.localeCompare(b));
-
-    if (sorted.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="2" class="no-data" style="padding:20px;text-align:center;color:#999;">Nenhum tipo cadastrado.</td></tr>`;
-        return;
+    // 4. Status das Manutenções (Doughnut)
+    var statusMap={pendente:0,em_andamento:0,concluida:0,vencida:0};
+    filtered.forEach(function(m){var st=getEffectiveStatus(m);statusMap[st]=(statusMap[st]||0)+1;});
+    var statusLabelsArr=["Pendente","Em Andamento","Concluída","Vencida"];
+    var statusDataArr=[statusMap.pendente,statusMap.em_andamento,statusMap.concluida,statusMap.vencida];
+    var statusColors=["#f39c12","#3498db","#2ecc71","#e74c3c"];
+    if(_chartManutStatus)_chartManutStatus.destroy();
+    var ctxSt=document.getElementById("chartManutStatus");
+    if(ctxSt){
+        _chartManutStatus=new Chart(ctxSt,{
+            type:"doughnut",
+            data:{labels:statusLabelsArr,datasets:[{data:statusDataArr,backgroundColor:statusColors,borderWidth:2,borderColor:"#fff"}]},
+            options:{responsive:true,plugins:{legend:{position:"right",labels:{font:{size:11}}}}}
+        });
     }
 
-    tbody.innerHTML = sorted.map(t => `
-        <tr>
-            <td>${t}</td>
-            <td style="white-space:nowrap;">
-                <button class="action-btn edit" onclick="editType('${escapeAttr(t)}')" title="Renomear"><i class="fas fa-edit"></i></button>
-                <button class="action-btn delete" onclick="deleteType('${escapeAttr(t)}')" title="Excluir"><i class="fas fa-trash"></i></button>
-            </td>
-        </tr>
-    `).join('');
-
-    // Atualiza datalist do formulário
-    document.getElementById('typesList').innerHTML = sorted.map(t => `<option value="${t}">`).join('');
-}
-
-function addType() {
-    const input = document.getElementById('newTypeName');
-    const name = input.value.trim();
-    if (!name) { showToast('Digite o nome do tipo.', 'warning'); return; }
-
-    if (maintenanceTypes.map(t => t.toLowerCase()).includes(name.toLowerCase())) {
-        showToast('Este tipo já existe.', 'warning');
-        return;
+    // 5. Recorrentes vs Avulsas (Pie)
+    var recorrente=0,avulsa=0;
+    filtered.forEach(function(m){if(m.recurring==="sim")recorrente++;else avulsa++;});
+    if(_chartManutRecorrente)_chartManutRecorrente.destroy();
+    var ctxRec=document.getElementById("chartManutRecorrente");
+    if(ctxRec){
+        _chartManutRecorrente=new Chart(ctxRec,{
+            type:"pie",
+            data:{labels:["Recorrentes","Avulsas"],datasets:[{data:[recorrente,avulsa],backgroundColor:["#9b59b6","#3498db"],borderWidth:2,borderColor:"#fff"}]},
+            options:{responsive:true,plugins:{legend:{position:"right",labels:{font:{size:11}}}}}
+        });
     }
-
-    maintenanceTypes.push(name);
-    input.value = '';
-    saveTypes().then(ok => {
-        if (ok) {
-            showToast('Tipo adicionado!', 'success');
-            renderTypesList();
-            populateFilterOptions();
-        } else {
-            showToast('Erro ao salvar.', 'error');
-        }
-    });
+    console.log("[ManutDashboard] Atualizado para "+year);
 }
-
-function editType(oldName) {
-    const newName = prompt('Renomear tipo:', oldName);
-    if (!newName || newName.trim() === oldName) return;
-    const trimmed = newName.trim();
-
-    if (maintenanceTypes.map(t => t.toLowerCase()).includes(trimmed.toLowerCase())) {
-        showToast('Este tipo já existe.', 'warning');
-        return;
-    }
-
-    // Renomear em todas as manutenções
-    maintenances.forEach(m => { if (m.type === oldName) m.type = trimmed; });
-    const idx = maintenanceTypes.indexOf(oldName);
-    if (idx !== -1) maintenanceTypes[idx] = trimmed;
-
-    Promise.all([saveTypes(), saveMaintenances()]).then(() => {
-        showToast('Tipo renomeado!', 'success');
-        renderTypesList();
-        renderTable();
-        populateFilterOptions();
-    });
-}
-
-function deleteType(name) {
-    const inUse = maintenances.some(m => m.type === name);
-    const msg = inUse
-        ? `O tipo "${name}" está em uso em ${maintenances.filter(m => m.type === name).length} manutenção(ões). Deseja excluir mesmo assim?`
-        : `Excluir o tipo "${name}"?`;
-
-    if (!confirm(msg)) return;
-
-    maintenanceTypes = maintenanceTypes.filter(t => t !== name);
-    saveTypes().then(ok => {
-        if (ok) {
-            showToast('Tipo excluído.', 'success');
-            renderTypesList();
-            populateFilterOptions();
-        } else {
-            showToast('Erro ao salvar.', 'error');
-        }
-    });
-}
-
-function escapeAttr(str) {
-    return str.replace(/'/g, "\\'");
-}
-
-// ===== ÁREAS/CÔMODOS — CRUD =====
-function renderAreasList() {
-    const tbody = document.getElementById('areasTableBody');
-    if (!tbody) return;
-
-    const sorted = [...maintenanceAreas].sort((a, b) => a.localeCompare(b));
-
-    if (sorted.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="2" class="no-data" style="padding:20px;text-align:center;color:#999;">Nenhuma área cadastrada.</td></tr>`;
-        return;
-    }
-
-    tbody.innerHTML = sorted.map(a => `
-        <tr>
-            <td>${a}</td>
-            <td style="white-space:nowrap;">
-                <button class="action-btn edit" onclick="editArea('${escapeAttr(a)}')" title="Renomear"><i class="fas fa-edit"></i></button>
-                <button class="action-btn delete" onclick="deleteArea('${escapeAttr(a)}')" title="Excluir"><i class="fas fa-trash"></i></button>
-            </td>
-        </tr>
-    `).join('');
-
-    // Atualiza datalist do formulário
-    document.getElementById('areasList').innerHTML = sorted.map(a => `<option value="${a}">`).join('');
-}
-
-function addArea() {
-    const input = document.getElementById('newAreaName');
-    const name = input.value.trim();
-    if (!name) { showToast('Digite o nome da área.', 'warning'); return; }
-
-    if (maintenanceAreas.map(a => a.toLowerCase()).includes(name.toLowerCase())) {
-        showToast('Esta área já existe.', 'warning');
-        return;
-    }
-
-    maintenanceAreas.push(name);
-    input.value = '';
-    saveAreas().then(ok => {
-        if (ok) {
-            showToast('Área adicionada!', 'success');
-            renderAreasList();
-            populateFilterOptions();
-        } else {
-            showToast('Erro ao salvar.', 'error');
-        }
-    });
-}
-
-function editArea(oldName) {
-    const newName = prompt('Renomear área:', oldName);
-    if (!newName || newName.trim() === oldName) return;
-    const trimmed = newName.trim();
-
-    if (maintenanceAreas.map(a => a.toLowerCase()).includes(trimmed.toLowerCase())) {
-        showToast('Esta área já existe.', 'warning');
-        return;
-    }
-
-    // Renomear em todas as manutenções
-    maintenances.forEach(m => { if (m.area === oldName) m.area = trimmed; });
-    const idx = maintenanceAreas.indexOf(oldName);
-    if (idx !== -1) maintenanceAreas[idx] = trimmed;
-
-    Promise.all([saveAreas(), saveMaintenances()]).then(() => {
-        showToast('Área renomeada!', 'success');
-        renderAreasList();
-        renderTable();
-        populateFilterOptions();
-    });
-}
-
-function deleteArea(name) {
-    const inUse = maintenances.some(m => m.area === name);
-    const msg = inUse
-        ? `A área "${name}" está em uso em ${maintenances.filter(m => m.area === name).length} manutenção(ões). Deseja excluir mesmo assim?`
-        : `Excluir a área "${name}"?`;
-
-    if (!confirm(msg)) return;
-
-    maintenanceAreas = maintenanceAreas.filter(a => a !== name);
-    saveAreas().then(ok => {
-        if (ok) {
-            showToast('Área excluída.', 'success');
-            renderAreasList();
-            populateFilterOptions();
-        } else {
-            showToast('Erro ao salvar.', 'error');
-        }
-    });
-}
-
-// ===== HELPERS =====
-function generateId() {
-    return 'manut_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-}
-
-function formatDate(dateStr) {
-    if (!dateStr) return '-';
-    const [y, m, d] = dateStr.split('-');
-    return `${d}/${m}/${y}`;
-}
-
-function periodLabel(p) {
-    const map = { '30': 'Mensal', '60': 'Bimestral', '90': 'Trimestral', '180': 'Semestral', '365': 'Anual' };
-    return map[p] || p + ' dias';
-}
-
-function showToast(msg, type = 'success') {
-    const el = document.getElementById('toastEl');
-    el.textContent = msg;
-    el.className = `toast show ${type}`;
-    setTimeout(() => { el.className = 'toast'; }, 3500);
-}
+window.updateManutDashboard=updateManutDashboard;

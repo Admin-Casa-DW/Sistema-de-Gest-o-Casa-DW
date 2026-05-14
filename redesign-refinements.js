@@ -129,6 +129,9 @@
 
         // 7. Mark extra sections for CSS hiding (class-based fallback)
         markExtraSections();
+
+        // 8. Cross-module widgets (Manutenções + Frota alerts)
+        addCrossModuleWidgets();
     }
 
     // =====================================================
@@ -519,6 +522,171 @@
             var a = document.getElementById('alertsSection');
             if (a) a.style.setProperty('display', 'none', 'important');
         }, 3000);
+    }
+
+    // =====================================================
+    // DASHBOARD - CROSS-MODULE WIDGETS (Manutenções + Frota)
+    // =====================================================
+    function addCrossModuleWidgets() {
+        if (document.getElementById('dashCrossWidgets')) return;
+        var chartsContainer = document.querySelector('.charts-container');
+        if (!chartsContainer) return;
+
+        var row = document.createElement('div');
+        row.id = 'dashCrossWidgets';
+        row.className = 'dash-cross-widgets';
+        row.innerHTML =
+            '<div class="dash-widget-card" id="widgetManut">' +
+                '<h3><i class="fas fa-wrench" style="color:#f59e0b;"></i> Manutenções</h3>' +
+                '<div class="dash-widget-kpis" id="wmKpis"></div>' +
+                '<ul class="dash-widget-list" id="wmList"></ul>' +
+                '<a href="manutencoes.html" class="dash-widget-link">Ver todas as manutenções <i class="fas fa-arrow-right"></i></a>' +
+            '</div>' +
+            '<div class="dash-widget-card" id="widgetFrota">' +
+                '<h3><i class="fas fa-car" style="color:#6366f1;"></i> Alertas da Frota</h3>' +
+                '<div class="dash-widget-kpis" id="wfKpis"></div>' +
+                '<ul class="dash-widget-list" id="wfList"></ul>' +
+                '<a href="frota.html" class="dash-widget-link">Ver gestão de frota <i class="fas fa-arrow-right"></i></a>' +
+            '</div>';
+        chartsContainer.parentNode.insertBefore(row, chartsContainer.nextSibling);
+
+        // Load data asynchronously
+        loadCrossWidgetData();
+    }
+
+    function loadCrossWidgetData() {
+        var userId = localStorage.getItem('user-id');
+        var apiUrl = window.APP_CONFIG ? window.APP_CONFIG.API_URL : '';
+        if (!userId || !apiUrl) return;
+
+        fetch(apiUrl + '/api/sync/' + userId)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                renderManutWidget(data.maintenance || data.maintenances || []);
+                renderFrotaWidget(data.fleet || {});
+            })
+            .catch(function(err) {
+                console.warn('Cross-widget data load error:', err);
+            });
+    }
+
+    function renderManutWidget(maintenances) {
+        var now = new Date();
+        var thisYear = now.getFullYear();
+        var yearItems = maintenances.filter(function(m) {
+            return m.date && parseInt(m.date.substring(0, 4)) === thisYear;
+        });
+
+        var pendentes = 0, vencidas = 0, concluidas = 0;
+        yearItems.forEach(function(m) {
+            var st = m.status;
+            if (st === 'concluida') { concluidas++; return; }
+            var refDate = m.nextDate || m.date;
+            if (refDate && new Date(refDate + 'T12:00:00') < now) { vencidas++; return; }
+            pendentes++;
+        });
+
+        var kpis = document.getElementById('wmKpis');
+        if (kpis) {
+            kpis.innerHTML =
+                '<div class="dash-widget-kpi orange"><div class="wk-value">' + pendentes + '</div><div class="wk-label">Pendentes</div></div>' +
+                '<div class="dash-widget-kpi red"><div class="wk-value">' + vencidas + '</div><div class="wk-label">Vencidas</div></div>' +
+                '<div class="dash-widget-kpi green"><div class="wk-value">' + concluidas + '</div><div class="wk-label">Concluídas</div></div>';
+        }
+
+        // Show up to 4 pending/overdue items
+        var urgentes = yearItems.filter(function(m) {
+            return m.status !== 'concluida';
+        }).sort(function(a, b) {
+            return new Date(a.date + 'T12:00:00') - new Date(b.date + 'T12:00:00');
+        }).slice(0, 4);
+
+        var list = document.getElementById('wmList');
+        if (list) {
+            if (urgentes.length === 0) {
+                list.innerHTML = '<div class="dash-widget-empty"><i class="fas fa-check-circle" style="color:#10b981;margin-right:6px;"></i> Nenhuma manutenção pendente</div>';
+            } else {
+                list.innerHTML = urgentes.map(function(m) {
+                    var mDate = new Date(m.date + 'T12:00:00');
+                    var diff = Math.ceil((mDate - now) / 86400000);
+                    var iconClass = diff < 0 ? 'red' : diff <= 7 ? 'orange' : 'green';
+                    var iconSymbol = diff < 0 ? 'fa-exclamation-triangle' : 'fa-clock';
+                    var timeText = diff < 0 ? Math.abs(diff) + ' dia(s) em atraso' : diff === 0 ? 'Hoje' : 'Em ' + diff + ' dia(s)';
+                    return '<li>' +
+                        '<div class="alert-icon ' + iconClass + '"><i class="fas ' + iconSymbol + '"></i></div>' +
+                        '<div class="alert-text"><strong>' + (m.type || 'Manutenção') + '</strong> - ' + (m.area || '') +
+                        '<small>' + timeText + ' &middot; ' + mDate.toLocaleDateString('pt-BR') + '</small></div>' +
+                    '</li>';
+                }).join('');
+            }
+        }
+    }
+
+    function renderFrotaWidget(fleet) {
+        var vehicles = fleet.vehicles || [];
+        if (vehicles.length === 0) {
+            var kpis = document.getElementById('wfKpis');
+            if (kpis) kpis.innerHTML = '';
+            var list = document.getElementById('wfList');
+            if (list) list.innerHTML = '<div class="dash-widget-empty">Nenhum veículo cadastrado</div>';
+            return;
+        }
+
+        var now = new Date();
+        var alerts = [];
+        var totalVeiculos = vehicles.length;
+        var vencidos = 0, proximos = 0;
+
+        var docTypes = [
+            { key: 'ipvaVencimento', label: 'IPVA' },
+            { key: 'licenciamentoVencimento', label: 'Licenciamento' },
+            { key: 'seguroVencimento', label: 'Seguro' }
+        ];
+
+        vehicles.forEach(function(v) {
+            docTypes.forEach(function(dt) {
+                var dateStr = v[dt.key];
+                if (!dateStr) return;
+                var d = new Date(dateStr + 'T12:00:00');
+                var diff = Math.ceil((d - now) / 86400000);
+                if (diff < 0) {
+                    vencidos++;
+                    alerts.push({ vehicle: v.modelo || v.model || '???', plate: v.placa || v.plate || '', doc: dt.label, diff: diff, date: d });
+                } else if (diff <= 30) {
+                    proximos++;
+                    alerts.push({ vehicle: v.modelo || v.model || '???', plate: v.placa || v.plate || '', doc: dt.label, diff: diff, date: d });
+                }
+            });
+        });
+
+        var kpis = document.getElementById('wfKpis');
+        if (kpis) {
+            kpis.innerHTML =
+                '<div class="dash-widget-kpi"><div class="wk-value">' + totalVeiculos + '</div><div class="wk-label">Veículos</div></div>' +
+                '<div class="dash-widget-kpi red"><div class="wk-value">' + vencidos + '</div><div class="wk-label">Docs Vencidos</div></div>' +
+                '<div class="dash-widget-kpi orange"><div class="wk-value">' + proximos + '</div><div class="wk-label">Próx. 30 dias</div></div>';
+        }
+
+        alerts.sort(function(a, b) { return a.diff - b.diff; });
+        var topAlerts = alerts.slice(0, 4);
+
+        var list = document.getElementById('wfList');
+        if (list) {
+            if (topAlerts.length === 0) {
+                list.innerHTML = '<div class="dash-widget-empty"><i class="fas fa-check-circle" style="color:#10b981;margin-right:6px;"></i> Todos os documentos em dia</div>';
+            } else {
+                list.innerHTML = topAlerts.map(function(a) {
+                    var iconClass = a.diff < 0 ? 'red' : 'orange';
+                    var iconSymbol = a.diff < 0 ? 'fa-exclamation-circle' : 'fa-bell';
+                    var timeText = a.diff < 0 ? Math.abs(a.diff) + ' dia(s) em atraso' : a.diff === 0 ? 'Vence hoje' : 'Vence em ' + a.diff + ' dia(s)';
+                    return '<li>' +
+                        '<div class="alert-icon ' + iconClass + '"><i class="fas ' + iconSymbol + '"></i></div>' +
+                        '<div class="alert-text"><strong>' + a.vehicle + '</strong> - ' + a.doc +
+                        '<small>' + timeText + ' &middot; ' + a.date.toLocaleDateString('pt-BR') + '</small></div>' +
+                    '</li>';
+                }).join('');
+            }
+        }
     }
 
     // =====================================================

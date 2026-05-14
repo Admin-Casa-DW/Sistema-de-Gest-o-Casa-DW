@@ -1,0 +1,2281 @@
+
+// ===== VERIFICAÇÃO DE PERMISSÃO MANUTENÇÕES =====
+function checkManutPerm(action) {
+    if (window.perm && !window.perm('manutencoes', action)) {
+        alert('Você não tem permissão para ' + action + ' em Manutenções.');
+        return false;
+    }
+    return true;
+}
+
+function applyManutPermissions() {
+    const canIncluir  = !window.perm || window.perm('manutencoes', 'incluir');
+    const canEditar   = !window.perm || window.perm('manutencoes', 'editar');
+    const canExcluir  = !window.perm || window.perm('manutencoes', 'excluir');
+    const canContratos = canIncluir || canEditar || canExcluir;
+
+    // Botões de adicionar manutenção/contrato
+    ['addManutBtn','addMaintenanceBtn','openContractsAddBtn'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && !canIncluir) { el.style.display = 'none'; }
+    });
+
+    if (!document.getElementById('manutPermStyle')) {
+        const s = document.createElement('style');
+        s.id = 'manutPermStyle';
+        let css = '';
+        if (!canEditar)  css += '.btn-edit-manut, .edit-maintenance-btn { display:none!important; } ';
+        if (!canExcluir) css += '.btn-delete-manut, .delete-maintenance-btn { display:none!important; } ';
+        if (!canIncluir) css += '.btn-add-manut, #addManutBtn, .add-maintenance-btn { display:none!important; } ';
+        if (!canContratos) css += '.btn-contract-action[onclick*="edit"], .btn-contract-action[onclick*="delete"] { display:none!important; } ';
+        if (css) {
+            s.textContent = css;
+            document.head.appendChild(s);
+        }
+    }
+}
+
+// ==============================
+// Manutenções Residenciais - DW Administradora
+// ==============================
+
+const API_URL_MANUT = window.APP_CONFIG?.API_URL || null;
+
+let maintenances = [];
+let maintenanceTypes = []; // lista gerenciada de tipos
+let maintenanceAreas = []; // lista gerenciada de áreas
+let calendarDate = new Date();
+let editingId = null;
+let viewingId = null;
+let pendingFiles = [];
+
+// Defaults se não houver nenhum salvo
+const DEFAULT_TYPES = ['Pintura', 'Hidráulica', 'Elétrica', 'Ar-condicionado', 'Dedetização', 'Limpeza', 'Reforma', 'Manutenção preventiva', 'Instalação', 'Reparo'];
+const DEFAULT_AREAS = ['Sala', 'Cozinha', 'Banheiro', 'Quarto', 'Garagem', 'Área externa', 'Piscina', 'Jardim', 'Lavanderia', 'Escritório', 'Geral'];
+
+// Format money in Brazilian format: R$ 1.234,56
+function formatMoney(value) {
+    if (value === null || value === undefined || isNaN(value)) return 'R$ 0,00';
+
+    const numValue = parseFloat(value);
+
+    // Use toLocaleString with pt-BR locale for proper formatting
+    return numValue.toLocaleString('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+}
+
+// ===== INIT =====
+document.addEventListener('DOMContentLoaded', async function() {
+    setTimeout(applyManutPermissions, 500);
+    await loadData();
+    updateDashboard();
+    renderAlerts();
+    renderCalendar();
+    renderTable();
+    populateFilterOptions();
+    setDefaultDate();
+    renderTypesList();
+    renderAreasList();
+    console.log('✅ Manutenções carregadas');
+});
+
+function setDefaultDate() {
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('manutDate').value = today;
+}
+
+// ===== DATA LOAD/SAVE =====
+async function loadData() {
+    try {
+        const userId = localStorage.getItem('user-id');
+        if (!userId || !API_URL_MANUT) {
+            console.warn('⚠️ Sem userId ou API_URL — usando dados locais');
+            maintenances = JSON.parse(localStorage.getItem('manut_local') || '[]');
+            maintenanceTypes = JSON.parse(localStorage.getItem('manut_types') || 'null') || [...DEFAULT_TYPES];
+            maintenanceAreas = JSON.parse(localStorage.getItem('manut_areas') || 'null') || [...DEFAULT_AREAS];
+            return;
+        }
+
+        const response = await fetch(`${API_URL_MANUT}/api/sync/${userId}`);
+        if (!response.ok) throw new Error('Erro na API');
+
+        const data = await response.json();
+        maintenances = data.maintenance || [];
+        maintenanceTypes = (data.maintenanceTypes && data.maintenanceTypes.length > 0)
+            ? data.maintenanceTypes
+            : [...DEFAULT_TYPES];
+        maintenanceAreas = (data.maintenanceAreas && data.maintenanceAreas.length > 0)
+            ? data.maintenanceAreas
+            : [...DEFAULT_AREAS];
+
+        console.log(`✅ ${maintenances.length} manutenções, ${maintenanceTypes.length} tipos, ${maintenanceAreas.length} áreas carregados`);
+    } catch (error) {
+        console.error('Erro ao carregar:', error);
+        maintenances = [];
+        maintenanceTypes = [...DEFAULT_TYPES];
+        maintenanceAreas = [...DEFAULT_AREAS];
+        // Avisar o usuario sobre falha no carregamento
+        showToast('Falha ao carregar dados de manutencoes do servidor. Verifique sua conexao.', 'error');
+    }
+}
+
+async function saveMaintenances() {
+    return saveToAPI({ maintenance: maintenances });
+}
+
+async function saveTypes() {
+    return saveToAPI({ maintenanceTypes });
+}
+
+async function saveAreas() {
+    return saveToAPI({ maintenanceAreas });
+}
+
+async function saveToAPI(payload) {
+    try {
+        const userId = localStorage.getItem('user-id');
+        if (!userId || !API_URL_MANUT) {
+            if (payload.maintenance !== undefined) localStorage.setItem('manut_local', JSON.stringify(maintenances));
+            if (payload.maintenanceTypes !== undefined) localStorage.setItem('manut_types', JSON.stringify(maintenanceTypes));
+            if (payload.maintenanceAreas !== undefined) localStorage.setItem('manut_areas', JSON.stringify(maintenanceAreas));
+            return true;
+        }
+
+        const response = await fetch(`${API_URL_MANUT}/api/sync`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, ...payload })
+        });
+
+        if (response.ok) return true;
+        console.error('❌ Erro ao salvar:', response.status);
+        return false;
+    } catch (error) {
+        console.error('❌ Erro ao salvar:', error);
+        return false;
+    }
+}
+
+// ===== STATUS LOGIC =====
+function getEffectiveStatus(m) {
+    if (m.status === 'concluida') return 'concluida';
+    if (m.status === 'em_andamento') return 'em_andamento';
+    if (m.nextDate) {
+        // Usar 'T12:00:00' para evitar bug de fuso horário
+        const next = new Date(m.nextDate + 'T12:00:00');
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (next < today) return 'vencida';
+    }
+    return m.status || 'pendente';
+}
+
+function statusLabel(s) {
+    return { pendente: 'Pendente', em_andamento: 'Em Andamento', concluida: 'Concluída', vencida: 'Vencida' }[s] || s;
+}
+
+// ===== DASHBOARD =====
+function updateDashboard() {
+    const currentYear = new Date().getFullYear();
+    let total = maintenances.length;
+    let pending = 0, done = 0, overdue = 0, cost = 0;
+
+    maintenances.forEach(m => {
+        const s = getEffectiveStatus(m);
+        if (s === 'concluida') done++;
+        else if (s === 'vencida') overdue++;
+        else pending++;
+
+        const execYear = m.date ? parseInt(m.date.substring(0, 4)) : null;
+        if (execYear === currentYear && m.cost) {
+            cost += parseFloat(m.cost || 0);
+        }
+    });
+
+    document.getElementById('cardTotal').textContent = total;
+    document.getElementById('cardPending').textContent = pending;
+    document.getElementById('cardOverdue').textContent = overdue;
+    document.getElementById('cardDone').textContent = done;
+    document.getElementById('cardCost').textContent = formatMoney(cost);
+}
+
+// ===== ALERTS =====
+// ===== ALERTAS — vencidas e próximas 7 dias =====
+// Verifica campo "date" (data de execução agendada) para pendentes/em_andamento.
+// Se a manutenção tiver nextDate e status não concluído, usa nextDate como data de referência.
+function getAlertDate(m) {
+    // Prioridade: nextDate se existir, senão date
+    if (m.nextDate) return m.nextDate;
+    return m.date;
+}
+
+function buildAlertLists() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const in7 = new Date(today);
+    in7.setDate(in7.getDate() + 7);
+
+    const overdue = [];
+    const soon = [];
+
+    maintenances.forEach(m => {
+        if (m.status === 'concluida') return;
+
+        const refDateStr = getAlertDate(m);
+        if (!refDateStr) return;
+
+        // Usar T00:00:00 para comparação de datas sem horas
+        const refDate = new Date(refDateStr + 'T00:00:00');
+
+        if (refDate < today) {
+            overdue.push({ m, refDate });
+        } else if (refDate <= in7) {
+            // Math.floor para calcular dias corretamente (hoje = 0, amanhã = 1)
+            const days = Math.floor((refDate - today) / 86400000);
+            soon.push({ m, refDate, days });
+        }
+    });
+
+    // Ordenar por data (mais urgente primeiro)
+    overdue.sort((a, b) => a.refDate - b.refDate);
+    soon.sort((a, b) => a.refDate - b.refDate);
+
+    return { overdue, soon };
+}
+
+function renderAlerts() {
+    const { overdue, soon } = buildAlertLists();
+    const total = overdue.length + soon.length;
+
+    const section = document.getElementById('alertsSection');
+    const list = document.getElementById('alertsList');
+
+    // Atualizar badge no tab
+    updateAlertBadge(total);
+
+    if (total === 0) {
+        section.style.display = 'none';
+        return;
+    }
+
+    section.style.display = 'block';
+    let html = '';
+
+    // Cabeçalho do bloco vencidas
+    if (overdue.length > 0) {
+        html += `<div class="alert-group-title alert-group-overdue">
+            <i class="fas fa-exclamation-triangle"></i>
+            Vencidas (${overdue.length})
+        </div>`;
+        overdue.forEach(({ m, refDate }) => {
+            const diasAtraso = Math.floor((new Date().setHours(0,0,0,0) - refDate) / 86400000);
+            const atrasoLabel = diasAtraso === 0 ? 'Hoje' : `${diasAtraso} dia(s) em atraso`;
+            html += `
+                <div class="alert-item alert-overdue">
+                    <div class="alert-icon overdue"><i class="fas fa-exclamation-triangle"></i></div>
+                    <div class="alert-info">
+                        <strong>${m.type} — ${m.area}</strong>
+                        <small>
+                            <span class="alert-tag overdue-tag">VENCIDA</span>
+                            ${atrasoLabel} · Prevista para ${formatDate(refDate.toISOString().split('T')[0])}
+                            ${m.supplier ? ' · ' + m.supplier : ''}
+                        </small>
+                    </div>
+                    <div class="alert-actions">
+                        <button class="btn-alert-action" onclick="openEditModal('${m.id}')" title="Editar">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn-alert-action" onclick="openViewModal('${m.id}')" title="Ver detalhes">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>`;
+        });
+    }
+
+    // Cabeçalho do bloco próximas 7 dias
+    if (soon.length > 0) {
+        html += `<div class="alert-group-title alert-group-soon">
+            <i class="fas fa-clock"></i>
+            Próximas — 7 dias (${soon.length})
+        </div>`;
+        soon.forEach(({ m, days, refDate }) => {
+            const daysLabel = days === 0 ? 'Hoje' : days === 1 ? 'Amanhã' : `Em ${days} dias`;
+            const urgencyClass = days <= 2 ? 'soon-urgent' : 'soon-normal';
+            html += `
+                <div class="alert-item alert-soon ${urgencyClass}">
+                    <div class="alert-icon soon"><i class="fas fa-clock"></i></div>
+                    <div class="alert-info">
+                        <strong>${m.type} — ${m.area}</strong>
+                        <small>
+                            <span class="alert-tag soon-tag">${daysLabel.toUpperCase()}</span>
+                            Prevista para ${formatDate(refDate.toISOString().split('T')[0])}
+                            ${m.supplier ? ' · ' + m.supplier : ''}
+                            ${m.recurring === 'sim' ? ' · ↻ Recorrente' : ''}
+                        </small>
+                    </div>
+                    <div class="alert-actions">
+                        <button class="btn-alert-action" onclick="openEditModal('${m.id}')" title="Editar">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn-alert-action" onclick="openViewModal('${m.id}')" title="Ver detalhes">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>`;
+        });
+    }
+
+    list.innerHTML = html;
+
+    // Exibir banner flutuante se houver vencidas
+    showAlertBanner(overdue.length, soon.length);
+}
+
+function updateAlertBadge(total) {
+    let badge = document.getElementById('alertTabBadge');
+    if (!badge) return;
+    if (total === 0) {
+        badge.style.display = 'none';
+    } else {
+        badge.textContent = total;
+        badge.style.display = 'inline-flex';
+    }
+
+    // Atualizar badge global no header
+    updateGlobalNotificationBadge(total);
+}
+
+function updateGlobalNotificationBadge(total) {
+    const globalBadge = document.getElementById('globalNotificationBadge');
+    const globalCount = document.getElementById('globalNotificationCount');
+    const globalText = document.getElementById('globalNotificationText');
+
+    if (!globalBadge || !globalCount || !globalText) return;
+
+    if (total === 0) {
+        globalBadge.style.display = 'none';
+        return;
+    }
+
+    // Verificar se há manutenções vencidas
+    const { overdue, soon } = buildAlertLists();
+
+    // Definir estilo baseado na urgência
+    if (overdue.length > 0) {
+        globalBadge.className = 'btn btn-notification'; // vermelho (padrão)
+        globalText.textContent = overdue.length === 1 ? 'Vencida' : 'Vencidas';
+    } else {
+        globalBadge.className = 'btn btn-notification warning'; // amarelo
+        globalText.textContent = 'Próximas';
+    }
+
+    globalCount.textContent = total;
+    globalBadge.style.display = 'flex';
+}
+
+function showAlertBanner(overdueCount, soonCount) {
+    // Remove banner anterior se existir
+    const existing = document.getElementById('alertFloatingBanner');
+    if (existing) existing.remove();
+
+    if (overdueCount === 0 && soonCount === 0) return;
+
+    // Não mostra mais de uma vez por sessão
+    if (sessionStorage.getItem('alertBannerShown')) return;
+    sessionStorage.setItem('alertBannerShown', '1');
+
+    // Tocar som sutil se houver vencidas (apenas uma vez por sessão)
+    if (overdueCount > 0) {
+        playNotificationSound();
+    }
+
+    const banner = document.createElement('div');
+    banner.id = 'alertFloatingBanner';
+
+    let msg = '';
+    let bannerClass = 'banner-soon';
+    if (overdueCount > 0) {
+        bannerClass = 'banner-overdue';
+        msg = `<i class="fas fa-exclamation-triangle"></i> <strong>${overdueCount} manutenção(ões) vencida(s)</strong>`;
+        if (soonCount > 0) msg += ` e <strong>${soonCount} a vencer em 7 dias</strong>`;
+    } else {
+        msg = `<i class="fas fa-clock"></i> <strong>${soonCount} manutenção(ões) a vencer nos próximos 7 dias</strong>`;
+    }
+
+    banner.className = `alert-floating-banner ${bannerClass}`;
+    banner.innerHTML = `
+        <span>${msg}</span>
+        <button onclick="goToAlerts()" class="banner-link">Ver alertas</button>
+        <button onclick="this.parentElement.remove()" class="banner-close">✕</button>
+    `;
+    document.body.appendChild(banner);
+
+    // Auto-fechar após 10 segundos
+    setTimeout(() => { if (banner.parentElement) banner.remove(); }, 10000);
+}
+
+// Tocar som de notificação sutil (Web Audio API)
+function playNotificationSound() {
+    try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        // Configurar som suave: frequência 800Hz (médio-agudo), volume baixo
+        oscillator.frequency.value = 800;
+        oscillator.type = 'sine';
+
+        // Envelope de volume: fade in/out para som mais suave
+        gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+        gainNode.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.05); // fade in
+        gainNode.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.15);
+        gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.25); // fade out
+
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.25);
+
+        // Segundo beep após pequena pausa
+        setTimeout(() => {
+            const oscillator2 = audioContext.createOscillator();
+            const gainNode2 = audioContext.createGain();
+
+            oscillator2.connect(gainNode2);
+            gainNode2.connect(audioContext.destination);
+
+            oscillator2.frequency.value = 1000;
+            oscillator2.type = 'sine';
+
+            gainNode2.gain.setValueAtTime(0, audioContext.currentTime);
+            gainNode2.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.05);
+            gainNode2.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.15);
+            gainNode2.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.25);
+
+            oscillator2.start(audioContext.currentTime);
+            oscillator2.stop(audioContext.currentTime + 0.25);
+        }, 300);
+
+    } catch (error) {
+        console.log('Notificação sonora não suportada neste navegador');
+    }
+}
+
+function goToAlerts() {
+    // Navegar para tab Agenda e rolar até alertas
+    const tabAgendaBtn = document.querySelector('[data-tab="agenda"]');
+    if (tabAgendaBtn) tabAgendaBtn.click();
+    setTimeout(() => {
+        const alertsSection = document.getElementById('alertsSection');
+        if (alertsSection) alertsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+    const banner = document.getElementById('alertFloatingBanner');
+    if (banner) banner.remove();
+}
+
+// ===== CALENDAR — somente data de execução =====
+function renderCalendar() {
+    const year = calendarDate.getFullYear();
+    const month = calendarDate.getMonth();
+
+    const MONTH_NAMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+                         'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+    document.getElementById('calendarTitle').textContent = `${MONTH_NAMES[month]} ${year}`;
+
+    const grid = document.getElementById('calendarGrid');
+    const days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    let html = days.map(d => `<div class="calendar-header">${d}</div>`).join('');
+
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const daysInPrev = new Date(year, month, 0).getDate();
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Indexar eventos pela data de EXECUÇÃO considerando a DURAÇÃO
+    const eventsMap = {};
+    maintenances.forEach(m => {
+        if (!m.date) return;
+
+        // Data inicial da manutenção
+        const startDate = new Date(m.date + 'T00:00:00');
+        const duration = m.duration || 1;
+
+        // Adicionar manutenção em cada dia da duração
+        for (let i = 0; i < duration; i++) {
+            const currentDate = new Date(startDate);
+            currentDate.setDate(currentDate.getDate() + i);
+
+            const currentYear = currentDate.getFullYear();
+            const currentMonth = currentDate.getMonth();
+            const currentDay = currentDate.getDate();
+
+            // Se o dia estiver no mês atual do calendário, adicionar ao mapa
+            if (currentYear === year && currentMonth === month) {
+                if (!eventsMap[currentDay]) eventsMap[currentDay] = [];
+
+                // Adicionar informação sobre qual dia da manutenção é (dia 1/4, dia 2/4, etc)
+                const dayInfo = duration > 1 ? ` (${i + 1}/${duration})` : '';
+                eventsMap[currentDay].push({ ...m, dayInfo });
+            }
+        }
+    });
+
+    // Dias do mês anterior
+    for (let i = firstDay - 1; i >= 0; i--) {
+        html += `<div class="calendar-day other-month"><div class="calendar-day-num">${daysInPrev - i}</div></div>`;
+    }
+
+    for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(year, month, day);
+        const isToday = date.getTime() === today.getTime();
+        let eventsHtml = '';
+
+        if (eventsMap[day]) {
+            eventsMap[day].slice(0, 3).forEach(m => {
+                const s = getEffectiveStatus(m);
+                const dayInfoText = m.dayInfo || '';
+                eventsHtml += `<div class="calendar-event status-${s}" title="${m.type} — ${m.area}${dayInfoText}" onclick="openViewModal('${m.id}')">
+                    <i class="fas fa-tools" style="font-size:9px;"></i> ${m.type}${dayInfoText}
+                </div>`;
+            });
+            if (eventsMap[day].length > 3) {
+                eventsHtml += `<div style="font-size:10px;color:#999;padding:1px 4px;">+${eventsMap[day].length - 3} mais</div>`;
+            }
+        }
+
+        html += `<div class="calendar-day${isToday ? ' today' : ''}">
+            <div class="calendar-day-num">${day}</div>
+            ${eventsHtml}
+        </div>`;
+    }
+
+    // Dias do próximo mês
+    const totalCells = firstDay + daysInMonth;
+    const remaining = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+    for (let i = 1; i <= remaining; i++) {
+        html += `<div class="calendar-day other-month"><div class="calendar-day-num">${i}</div></div>`;
+    }
+
+    grid.innerHTML = html;
+}
+
+function changeMonth(dir) {
+    calendarDate.setMonth(calendarDate.getMonth() + dir);
+    renderCalendar();
+}
+
+// ===== TABLE =====
+function renderTable() {
+    const statusF = document.getElementById('filterStatus').value;
+    const areaF = document.getElementById('filterArea').value;
+    const typeF = document.getElementById('filterType').value;
+    const searchF = document.getElementById('filterSearch').value.toLowerCase();
+    const dateFromF = document.getElementById('filterDateFrom').value;
+    const dateToF = document.getElementById('filterDateTo').value;
+
+    let filtered = maintenances.filter(m => {
+        const s = getEffectiveStatus(m);
+        if (statusF && s !== statusF) return false;
+        if (areaF && m.area !== areaF) return false;
+        if (typeF && m.type !== typeF) return false;
+        if (searchF) {
+            const text = `${m.type} ${m.area} ${m.supplier} ${m.desc}`.toLowerCase();
+            if (!text.includes(searchF)) return false;
+        }
+
+        // Filtro por período (data de execução)
+        if (dateFromF && m.date && m.date < dateFromF) return false;
+        if (dateToF && m.date && m.date > dateToF) return false;
+
+        return true;
+    });
+
+    filtered.sort((a, b) => {
+        const na = a.date || '';
+        const nb = b.date || '';
+        return nb.localeCompare(na); // mais recente primeiro
+    });
+
+    const tbody = document.getElementById('manutTableBody');
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" class="no-data">
+            <i class="fas fa-tools" style="font-size:40px;margin-bottom:10px;display:block;"></i>
+            <p>Nenhuma manutenção encontrada.</p>
+        </td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = filtered.map(m => {
+        const s = getEffectiveStatus(m);
+        const cost = m.cost ? formatMoney(m.cost) : '-';
+
+        // Indicadores visuais
+        let badges = '';
+        if (m.recurring === 'sim') {
+            badges += ' <span title="Recorrente" style="color:#3498db;font-size:11px;">↻</span>';
+        }
+        if (m.originId) {
+            badges += ' <span title="Gerada automaticamente por recorrência" style="background:#e8f5e9;color:#2e7d32;font-size:10px;padding:2px 6px;border-radius:3px;font-weight:600;">AUTO</span>';
+        }
+
+        const durationText = (m.duration && m.duration > 1)
+            ? `${m.duration} dias`
+            : '1 dia';
+
+        return `<tr>
+            <td><strong>${m.type}</strong>${badges}</td>
+            <td>${m.area}</td>
+            <td>${m.supplier || '-'}</td>
+            <td>${formatDate(m.date)}</td>
+            <td>${durationText}</td>
+            <td>${formatDate(m.nextDate)}</td>
+            <td>${cost}</td>
+            <td><span class="status-badge ${s}">${statusLabel(s)}</span></td>
+            <td>
+                <button class="action-btn view" onclick="openViewModal('${m.id}')"><i class="fas fa-eye"></i></button>
+                <button class="action-btn edit" onclick="openEditModal('${m.id}')"><i class="fas fa-edit"></i></button>
+                <button class="action-btn delete" onclick="deleteManut('${m.id}')"><i class="fas fa-trash"></i></button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function populateFilterOptions() {
+    // Reset e repopula filtros
+    const areaSelect = document.getElementById('filterArea');
+    areaSelect.innerHTML = '<option value="">Todas as Áreas</option>';
+    maintenanceAreas.sort().forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = a; opt.textContent = a;
+        areaSelect.appendChild(opt);
+    });
+
+    const typeSelect = document.getElementById('filterType');
+    typeSelect.innerHTML = '<option value="">Todos os Tipos</option>';
+    maintenanceTypes.sort().forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t; opt.textContent = t;
+        typeSelect.appendChild(opt);
+    });
+
+    // Datalists para o formulário
+    document.getElementById('areasList').innerHTML = maintenanceAreas.sort().map(a => `<option value="${a}">`).join('');
+    document.getElementById('typesList').innerHTML = maintenanceTypes.sort().map(t => `<option value="${t}">`).join('');
+}
+
+function clearDateFilters() {
+    document.getElementById('filterDateFrom').value = '';
+    document.getElementById('filterDateTo').value = '';
+    renderTable();
+}
+
+// ===== TABS =====
+function switchTab(tab, btn) {
+    document.querySelectorAll('.manut-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.manut-panel').forEach(p => p.classList.remove('active'));
+    const tabMap = { agenda: 'tabAgenda', lista: 'tabLista', tipos: 'tabTipos', areas: 'tabAreas' };
+    document.getElementById(tabMap[tab]).classList.add('active');
+    btn.classList.add('active');
+}
+
+// ===== MODAL: NOVA/EDITAR MANUTENÇÃO =====
+function openManutModal() {
+    editingId = null;
+    pendingFiles = [];
+    document.getElementById('modalTitle').textContent = 'Nova Manutenção';
+    document.getElementById('manutForm').reset();
+    document.getElementById('manutId').value = '';
+    document.getElementById('uploadPreview').innerHTML = '';
+    document.getElementById('recurrenceFields').classList.remove('visible');
+    setDefaultDate();
+    document.getElementById('manutModal').classList.add('active');
+}
+
+function openEditModal(id) {
+    const m = maintenances.find(x => x.id === id);
+    if (!m) return;
+
+    editingId = id;
+    pendingFiles = [];
+    document.getElementById('modalTitle').textContent = 'Editar Manutenção';
+    document.getElementById('manutId').value = m.id;
+    document.getElementById('manutType').value = m.type || '';
+    document.getElementById('manutArea').value = m.area || '';
+    document.getElementById('manutSupplier').value = m.supplier || '';
+    document.getElementById('manutDate').value = m.date || '';
+    document.getElementById('manutDuration').value = m.duration || 1;
+    document.getElementById('manutNextDate').value = m.nextDate || '';
+    document.getElementById('manutCost').value = m.cost || '';
+    document.getElementById('manutStatus').value = m.status || 'pendente';
+    document.getElementById('manutRecurring').value = m.recurring || 'nao';
+    document.getElementById('manutPeriod').value = m.period || '365';
+    document.getElementById('manutDesc').value = m.desc || '';
+    document.getElementById('manutLaunchExpense').value = m.launchExpense || 'nao';
+
+    renderExistingFiles(m.files || []);
+
+    const recFields = document.getElementById('recurrenceFields');
+    if (m.recurring === 'sim') recFields.classList.add('visible');
+    else recFields.classList.remove('visible');
+
+    document.getElementById('manutModal').classList.add('active');
+}
+
+function renderExistingFiles(files) {
+    const preview = document.getElementById('uploadPreview');
+    preview.innerHTML = files.map((f, i) => {
+        const isImage = f.url && /\.(jpg|jpeg|png|gif|webp)/i.test(f.url);
+        if (isImage) {
+            return `<div class="upload-preview-item">
+                <img src="${f.url}" alt="${f.name}" loading="lazy" onclick="window.open('${f.url}','_blank')">
+                <button class="remove-file" onclick="removeExistingFile(${i})" title="Remover">×</button>
+                <div class="file-name">${f.name}</div>
+            </div>`;
+        } else {
+            return `<div class="upload-preview-item">
+                <a href="${f.url}" target="_blank"><i class="fas fa-file-pdf"></i> ${f.name}</a>
+                <button class="remove-file" onclick="removeExistingFile(${i})" title="Remover" style="top:-3px;right:-3px;">×</button>
+            </div>`;
+        }
+    }).join('');
+}
+
+function removeExistingFile(index) {
+    if (!editingId) return;
+    const m = maintenances.find(x => x.id === editingId);
+    if (m && m.files) {
+        m.files.splice(index, 1);
+        renderExistingFiles(m.files);
+    }
+}
+
+function closeManutModal() {
+    document.getElementById('manutModal').classList.remove('active');
+    pendingFiles = [];
+    editingId = null;
+}
+
+function toggleRecurrence() {
+    const val = document.getElementById('manutRecurring').value;
+    const fields = document.getElementById('recurrenceFields');
+    if (val === 'sim') {
+        fields.classList.add('visible');
+        autoCalcNextDate();
+    } else {
+        fields.classList.remove('visible');
+    }
+}
+
+function autoCalcNextDate() {
+    const dateVal = document.getElementById('manutDate').value;
+    const period = parseInt(document.getElementById('manutPeriod').value || '365');
+    if (!dateVal) return;
+    // Usar 'T12:00:00' para evitar bug de fuso horário
+    // new Date("2026-02-01") interpreta como UTC 00:00, que em UTC-3 cai em 31/jan
+    const d = new Date(dateVal + 'T12:00:00');
+    d.setDate(d.getDate() + period);
+    document.getElementById('manutNextDate').value = d.toISOString().split('T')[0];
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('manutDate')?.addEventListener('change', function() {
+        if (document.getElementById('manutRecurring').value === 'sim') autoCalcNextDate();
+    });
+    document.getElementById('manutPeriod')?.addEventListener('change', autoCalcNextDate);
+});
+
+// ===== FILE UPLOAD =====
+function handleFileSelect(event) {
+    Array.from(event.target.files).forEach(file => pendingFiles.push(file));
+    renderPendingFiles();
+    event.target.value = '';
+}
+
+function renderPendingFiles() {
+    const preview = document.getElementById('uploadPreview');
+    // Revogar blob URLs existentes antes de remover elementos
+    preview.querySelectorAll('[data-pending] img[src^="blob:"]').forEach(img => {
+        URL.revokeObjectURL(img.src);
+    });
+    preview.querySelectorAll('[data-pending]').forEach(el => el.remove());
+
+    const html = pendingFiles.map((f, i) => {
+        const isImage = f.type.startsWith('image/');
+        if (isImage) {
+            const url = URL.createObjectURL(f);
+            return `<div class="upload-preview-item" data-pending="${i}">
+                <img src="${url}" alt="${f.name}" loading="lazy" onload="URL.revokeObjectURL(this.src)">
+                <button class="remove-file" onclick="removePendingFile(${i})">×</button>
+                <div class="file-name">${f.name}</div>
+            </div>`;
+        } else {
+            return `<div class="upload-preview-item" data-pending="${i}">
+                <div style="padding:8px;background:#f5f5f5;border-radius:5px;font-size:12px;max-width:70px;word-break:break-all;">
+                    <i class="fas fa-file-pdf" style="color:#e74c3c;"></i><br>${f.name}
+                </div>
+                <button class="remove-file" onclick="removePendingFile(${i})">×</button>
+            </div>`;
+        }
+    });
+
+    preview.insertAdjacentHTML('beforeend', html.join(''));
+}
+
+function removePendingFile(index) {
+    pendingFiles.splice(index, 1);
+    renderPendingFiles();
+}
+
+async function uploadPendingFiles(userId) {
+    const uploaded = [];
+    for (const file of pendingFiles) {
+        try {
+            const base64 = await fileToBase64(file);
+            const response = await fetch(`${API_URL_MANUT}/api/upload`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ file: base64, filename: file.name, userId })
+            });
+            const result = await response.json();
+            if (result.success) uploaded.push({ name: file.name, url: result.url, publicId: result.publicId });
+        } catch (err) {
+            console.error('Erro ao enviar arquivo:', err);
+        }
+    }
+    return uploaded;
+}
+
+function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
+// ===== SAVE MANUTENÇÃO =====
+async function saveManut(event) {
+    event.preventDefault();
+
+    const saveBtn = document.getElementById('saveBtn');
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+
+    try {
+        const userId = localStorage.getItem('user-id') || 'admin';
+
+        let newFiles = [];
+        if (pendingFiles.length > 0 && API_URL_MANUT) {
+            showToast('Enviando arquivos...', 'warning');
+            newFiles = await uploadPendingFiles(userId);
+        }
+
+        const id = editingId || generateId();
+        const type = document.getElementById('manutType').value.trim();
+        const area = document.getElementById('manutArea').value.trim();
+        const supplier = document.getElementById('manutSupplier').value.trim();
+        const date = document.getElementById('manutDate').value;
+        const duration = parseInt(document.getElementById('manutDuration').value) || 1;
+        const nextDate = document.getElementById('manutNextDate').value;
+        const cost = document.getElementById('manutCost').value;
+        const status = document.getElementById('manutStatus').value;
+        const recurring = document.getElementById('manutRecurring').value;
+        const period = document.getElementById('manutPeriod').value;
+        const desc = document.getElementById('manutDesc').value.trim();
+        const launchExpense = document.getElementById('manutLaunchExpense').value;
+
+        let existingFiles = [];
+        let previousDate = null;
+        if (editingId) {
+            const existing = maintenances.find(x => x.id === editingId);
+            existingFiles = existing?.files || [];
+            previousDate = existing?.date; // Salvar data anterior para comparação
+        }
+
+        // Se a data foi alterada ao editar, limpar nextDate para evitar conflitos
+        let finalNextDate = nextDate;
+        if (editingId && previousDate && previousDate !== date) {
+            console.log(`📅 Data alterada de ${previousDate} para ${date} - limpando nextDate`);
+            finalNextDate = ''; // Limpar nextDate quando data for alterada manualmente
+        }
+
+        const record = {
+            id,
+            type,
+            area,
+            supplier,
+            date,
+            duration: duration,
+            nextDate: finalNextDate,
+            cost: cost ? parseFloat(cost) : null,
+            status,
+            recurring,
+            period: recurring === 'sim' ? period : null,
+            desc,
+            launchExpense,
+            files: [...existingFiles, ...newFiles],
+            updatedAt: new Date().toISOString()
+        };
+
+        if (editingId) {
+            const idx = maintenances.findIndex(x => x.id === editingId);
+            record.createdAt = maintenances[idx].createdAt;
+            maintenances[idx] = record;
+        } else {
+            record.createdAt = new Date().toISOString();
+            maintenances.push(record);
+        }
+
+        if (launchExpense === 'sim' && cost && parseFloat(cost) > 0) {
+            await launchAsExpense(record, userId);
+        }
+
+        // Se recorrente e status = concluída, criar próxima manutenção automaticamente
+        if (record.recurring === 'sim' && record.status === 'concluida' && record.period) {
+            createRecurringMaintenance(record);
+        }
+
+        const saved = await saveMaintenances();
+
+        if (saved) {
+            const wasRecurring = record.recurring === 'sim' && record.status === 'concluida' && record.period;
+            showToast(
+                (editingId ? 'Manutenção atualizada!' : 'Manutenção cadastrada!') +
+                (wasRecurring ? ' Próxima manutenção agendada automaticamente.' : ''),
+                'success'
+            );
+            closeManutModal();
+            updateDashboard();
+            renderAlerts();
+            renderCalendar();
+            renderTable();
+            populateFilterOptions();
+        } else {
+            showToast('Erro ao salvar. Tente novamente.', 'error');
+        }
+    } catch (err) {
+        console.error('Erro ao salvar manutenção:', err);
+        showToast('Erro ao salvar.', 'error');
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i class="fas fa-save"></i> Salvar';
+        pendingFiles = [];
+    }
+}
+
+async function launchAsExpense(record, userId) {
+    try {
+        const resp = await fetch(`${API_URL_MANUT}/api/sync/${userId}`);
+        const data = await resp.json();
+
+        const monthIndex = record.date ? parseInt(record.date.substring(5, 7)) - 1 : new Date().getMonth();
+        const expensesByMonth = {};
+        for (let i = 0; i < 12; i++) expensesByMonth[i] = [];
+
+        if (data.expenses && Array.isArray(data.expenses)) {
+            data.expenses.forEach(exp => {
+                (exp.items || []).forEach(item => {
+                    expensesByMonth[exp.month] = expensesByMonth[exp.month] || [];
+                    expensesByMonth[exp.month].push({
+                        ...item,
+                        year: item.date ? parseInt(item.date.substring(0, 4)) : exp.year
+                    });
+                });
+            });
+        }
+
+        expensesByMonth[monthIndex].push({
+            id: generateId(),
+            date: record.date,
+            category: 'Manutenção',
+            supplier: record.supplier || record.type,
+            description: `Manutenção: ${record.type} — ${record.area}`,
+            paymentMethod: 'Conta Corrente',
+            amount: record.cost,
+            year: record.date ? parseInt(record.date.substring(0, 4)) : new Date().getFullYear()
+        });
+
+        const expensesAPI = [];
+        for (let i = 0; i < 12; i++) {
+            if (expensesByMonth[i] && expensesByMonth[i].length > 0) {
+                const byYear = {};
+                expensesByMonth[i].forEach(item => {
+                    const y = item.year || new Date().getFullYear();
+                    if (!byYear[y]) byYear[y] = [];
+                    byYear[y].push(item);
+                });
+                Object.entries(byYear).forEach(([year, items]) => {
+                    expensesAPI.push({ month: i, year: parseInt(year), items });
+                });
+            }
+        }
+
+        await fetch(`${API_URL_MANUT}/api/sync`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, expenses: expensesAPI })
+        });
+
+        showToast('Despesa lançada automaticamente!', 'success');
+    } catch (err) {
+        console.error('Erro ao lançar despesa:', err);
+    }
+}
+
+// ===== DELETE MANUTENÇÃO =====
+async function deleteManut(id) {
+    if (!confirm('Deseja excluir esta manutenção?')) return;
+    maintenances = maintenances.filter(m => m.id !== id);
+    await saveMaintenances();
+    updateDashboard();
+    renderAlerts();
+    renderCalendar();
+    renderTable();
+    populateFilterOptions();
+    showToast('Manutenção excluída.', 'success');
+}
+
+// ===== VIEW MODAL =====
+function openViewModal(id) {
+    const m = maintenances.find(x => x.id === id);
+    if (!m) return;
+    viewingId = id;
+
+    const s = getEffectiveStatus(m);
+
+    let filesHtml = '';
+    if (m.files && m.files.length > 0) {
+        filesHtml = '<div class="photo-list">' + m.files.map(f => {
+            const isImage = /\.(jpg|jpeg|png|gif|webp)/i.test(f.url);
+            if (isImage) {
+                return `<div class="photo-item"><img src="${f.url}" alt="${f.name}" loading="lazy" onclick="window.open('${f.url}','_blank')" title="${f.name}"></div>`;
+            } else {
+                return `<div class="photo-item"><a href="${f.url}" target="_blank"><i class="fas fa-file-pdf"></i> ${f.name}</a></div>`;
+            }
+        }).join('') + '</div>';
+    } else {
+        filesHtml = '<span style="color:#999;font-size:13px;">Nenhum arquivo</span>';
+    }
+
+    // Indicador de manutenção gerada automaticamente
+    const autoGenerated = m.originId
+        ? '<span style="background:#e8f5e9;color:#2e7d32;font-size:11px;padding:3px 8px;border-radius:4px;font-weight:600;margin-left:8px;">🔄 GERADA AUTOMATICAMENTE</span>'
+        : '';
+
+    const durationText = (m.duration && m.duration > 1)
+        ? `${m.duration} dias`
+        : '1 dia';
+
+    document.getElementById('viewContent').innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 20px;">
+            <div style="grid-column:1/-1;"><strong style="color:#7f8c8d;font-size:12px;">TIPO</strong><br>${m.type}${autoGenerated}</div>
+            <div><strong style="color:#7f8c8d;font-size:12px;">ÁREA/CÔMODO</strong><br>${m.area}</div>
+            <div><strong style="color:#7f8c8d;font-size:12px;">FORNECEDOR</strong><br>${m.supplier || '-'}</div>
+            <div><strong style="color:#7f8c8d;font-size:12px;">STATUS</strong><br><span class="status-badge ${s}">${statusLabel(s)}</span></div>
+            <div><strong style="color:#7f8c8d;font-size:12px;">DATA DE EXECUÇÃO</strong><br>${formatDate(m.date)}</div>
+            <div><strong style="color:#7f8c8d;font-size:12px;">DURAÇÃO</strong><br>${durationText}</div>
+            <div><strong style="color:#7f8c8d;font-size:12px;">PRÓXIMA PREVISÃO</strong><br>${formatDate(m.nextDate) || '-'}</div>
+            <div><strong style="color:#7f8c8d;font-size:12px;">CUSTO</strong><br>${m.cost ? formatMoney(m.cost) : '-'}</div>
+            <div><strong style="color:#7f8c8d;font-size:12px;">RECORRENTE</strong><br>${m.recurring === 'sim' ? 'Sim (' + periodLabel(m.period) + ')' : 'Não'}</div>
+            ${m.desc ? `<div style="grid-column:1/-1;"><strong style="color:#7f8c8d;font-size:12px;">DESCRIÇÃO</strong><br>${m.desc}</div>` : ''}
+            <div style="grid-column:1/-1;"><strong style="color:#7f8c8d;font-size:12px;">FOTOS / DOCUMENTOS</strong><br>${filesHtml}</div>
+        </div>
+    `;
+    document.getElementById('viewModal').classList.add('active');
+}
+
+function closeViewModal() {
+    document.getElementById('viewModal').classList.remove('active');
+    viewingId = null;
+}
+
+function editFromView() {
+    const id = viewingId;
+    closeViewModal();
+    if (id) openEditModal(id);
+}
+
+// ===== TIPOS DE MANUTENÇÃO — CRUD =====
+function renderTypesList() {
+    const tbody = document.getElementById('typesTableBody');
+    if (!tbody) return;
+
+    const sorted = [...maintenanceTypes].sort((a, b) => a.localeCompare(b));
+
+    if (sorted.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="2" class="no-data" style="padding:20px;text-align:center;color:#999;">Nenhum tipo cadastrado.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = sorted.map(t => `
+        <tr>
+            <td>${t}</td>
+            <td style="white-space:nowrap;">
+                <button class="action-btn edit" onclick="editType('${escapeAttr(t)}')" title="Renomear"><i class="fas fa-edit"></i></button>
+                <button class="action-btn delete" onclick="deleteType('${escapeAttr(t)}')" title="Excluir"><i class="fas fa-trash"></i></button>
+            </td>
+        </tr>
+    `).join('');
+
+    // Atualiza datalist do formulário
+    document.getElementById('typesList').innerHTML = sorted.map(t => `<option value="${t}">`).join('');
+}
+
+function addType() {
+    const input = document.getElementById('newTypeName');
+    const name = input.value.trim();
+    if (!name) { showToast('Digite o nome do tipo.', 'warning'); return; }
+
+    if (maintenanceTypes.map(t => t.toLowerCase()).includes(name.toLowerCase())) {
+        showToast('Este tipo já existe.', 'warning');
+        return;
+    }
+
+    maintenanceTypes.push(name);
+    input.value = '';
+    saveTypes().then(ok => {
+        if (ok) {
+            showToast('Tipo adicionado!', 'success');
+            renderTypesList();
+            populateFilterOptions();
+        } else {
+            showToast('Erro ao salvar.', 'error');
+        }
+    });
+}
+
+function editType(oldName) {
+    const newName = prompt('Renomear tipo:', oldName);
+    if (!newName || newName.trim() === oldName) return;
+    const trimmed = newName.trim();
+
+    if (maintenanceTypes.map(t => t.toLowerCase()).includes(trimmed.toLowerCase())) {
+        showToast('Este tipo já existe.', 'warning');
+        return;
+    }
+
+    // Renomear em todas as manutenções
+    maintenances.forEach(m => { if (m.type === oldName) m.type = trimmed; });
+    const idx = maintenanceTypes.indexOf(oldName);
+    if (idx !== -1) maintenanceTypes[idx] = trimmed;
+
+    Promise.all([saveTypes(), saveMaintenances()]).then(() => {
+        showToast('Tipo renomeado!', 'success');
+        renderTypesList();
+        renderTable();
+        populateFilterOptions();
+    });
+}
+
+function deleteType(name) {
+    const inUse = maintenances.some(m => m.type === name);
+    const msg = inUse
+        ? `O tipo "${name}" está em uso em ${maintenances.filter(m => m.type === name).length} manutenção(ões). Deseja excluir mesmo assim?`
+        : `Excluir o tipo "${name}"?`;
+
+    if (!confirm(msg)) return;
+
+    maintenanceTypes = maintenanceTypes.filter(t => t !== name);
+    saveTypes().then(ok => {
+        if (ok) {
+            showToast('Tipo excluído.', 'success');
+            renderTypesList();
+            populateFilterOptions();
+        } else {
+            showToast('Erro ao salvar.', 'error');
+        }
+    });
+}
+
+function escapeAttr(str) {
+    return str.replace(/'/g, "\\'");
+}
+
+// ===== ÁREAS/CÔMODOS — CRUD =====
+function renderAreasList() {
+    const tbody = document.getElementById('areasTableBody');
+    if (!tbody) return;
+
+    const sorted = [...maintenanceAreas].sort((a, b) => a.localeCompare(b));
+
+    if (sorted.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="2" class="no-data" style="padding:20px;text-align:center;color:#999;">Nenhuma área cadastrada.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = sorted.map(a => `
+        <tr>
+            <td>${a}</td>
+            <td style="white-space:nowrap;">
+                <button class="action-btn edit" onclick="editArea('${escapeAttr(a)}')" title="Renomear"><i class="fas fa-edit"></i></button>
+                <button class="action-btn delete" onclick="deleteArea('${escapeAttr(a)}')" title="Excluir"><i class="fas fa-trash"></i></button>
+            </td>
+        </tr>
+    `).join('');
+
+    // Atualiza datalist do formulário
+    document.getElementById('areasList').innerHTML = sorted.map(a => `<option value="${a}">`).join('');
+}
+
+function addArea() {
+    const input = document.getElementById('newAreaName');
+    const name = input.value.trim();
+    if (!name) { showToast('Digite o nome da área.', 'warning'); return; }
+
+    if (maintenanceAreas.map(a => a.toLowerCase()).includes(name.toLowerCase())) {
+        showToast('Esta área já existe.', 'warning');
+        return;
+    }
+
+    maintenanceAreas.push(name);
+    input.value = '';
+    saveAreas().then(ok => {
+        if (ok) {
+            showToast('Área adicionada!', 'success');
+            renderAreasList();
+            populateFilterOptions();
+        } else {
+            showToast('Erro ao salvar.', 'error');
+        }
+    });
+}
+
+function editArea(oldName) {
+    const newName = prompt('Renomear área:', oldName);
+    if (!newName || newName.trim() === oldName) return;
+    const trimmed = newName.trim();
+
+    if (maintenanceAreas.map(a => a.toLowerCase()).includes(trimmed.toLowerCase())) {
+        showToast('Esta área já existe.', 'warning');
+        return;
+    }
+
+    // Renomear em todas as manutenções
+    maintenances.forEach(m => { if (m.area === oldName) m.area = trimmed; });
+    const idx = maintenanceAreas.indexOf(oldName);
+    if (idx !== -1) maintenanceAreas[idx] = trimmed;
+
+    Promise.all([saveAreas(), saveMaintenances()]).then(() => {
+        showToast('Área renomeada!', 'success');
+        renderAreasList();
+        renderTable();
+        populateFilterOptions();
+    });
+}
+
+function deleteArea(name) {
+    const inUse = maintenances.some(m => m.area === name);
+    const msg = inUse
+        ? `A área "${name}" está em uso em ${maintenances.filter(m => m.area === name).length} manutenção(ões). Deseja excluir mesmo assim?`
+        : `Excluir a área "${name}"?`;
+
+    if (!confirm(msg)) return;
+
+    maintenanceAreas = maintenanceAreas.filter(a => a !== name);
+    saveAreas().then(ok => {
+        if (ok) {
+            showToast('Área excluída.', 'success');
+            renderAreasList();
+            populateFilterOptions();
+        } else {
+            showToast('Erro ao salvar.', 'error');
+        }
+    });
+}
+
+// ===== HELPERS =====
+// ===== MANUTENÇÃO RECORRENTE =====
+// Quando uma manutenção recorrente é concluída, cria automaticamente
+// a próxima na agenda com base na periodicidade configurada.
+function createRecurringMaintenance(completedRecord) {
+    const days = parseInt(completedRecord.period);
+    if (!days || isNaN(days)) return;
+
+    // Calcula a próxima data a partir da data de execução da manutenção concluída
+    const baseDate = completedRecord.date ? new Date(completedRecord.date + 'T12:00:00') : new Date();
+    const nextDate = new Date(baseDate);
+    nextDate.setDate(nextDate.getDate() + days);
+    const nextDateStr = nextDate.toISOString().split('T')[0];
+
+    // Verifica se já existe manutenção pendente com os mesmos dados para evitar duplicata
+    const alreadyExists = maintenances.some(m =>
+        m.type === completedRecord.type &&
+        m.area === completedRecord.area &&
+        m.date === nextDateStr &&
+        (m.status === 'pendente' || m.status === 'em_andamento')
+    );
+
+    if (alreadyExists) {
+        console.log('⚠️ Próxima manutenção recorrente já existe — não duplicando.');
+        return;
+    }
+
+    const newRecord = {
+        id: generateId(),
+        type: completedRecord.type,
+        area: completedRecord.area,
+        supplier: completedRecord.supplier || '',
+        date: nextDateStr,
+        nextDate: '',
+        cost: null,
+        status: 'pendente',
+        recurring: 'sim',
+        period: completedRecord.period,
+        desc: completedRecord.desc || '',
+        launchExpense: 'nao',
+        files: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        originId: completedRecord.id   // referência à manutenção que a gerou
+    };
+
+    maintenances.push(newRecord);
+    console.log(`✅ Próxima manutenção recorrente criada: ${newRecord.type} em ${nextDateStr}`);
+}
+
+function generateId() {
+    return 'manut_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return '-';
+    const [y, m, d] = dateStr.split('-');
+    return `${d}/${m}/${y}`;
+}
+
+function periodLabel(p) {
+    const map = { '30': 'Mensal', '60': 'Bimestral', '90': 'Trimestral', '180': 'Semestral', '365': 'Anual' };
+    return map[p] || p + ' dias';
+}
+
+function showToast(msg, type = 'success') {
+    const el = document.getElementById('toastEl');
+    el.innerHTML = msg + ' <button onclick="this.parentElement.className=\'toast\'" style="background:none;border:none;color:inherit;font-size:18px;cursor:pointer;margin-left:8px;padding:4px;">&times;</button>';
+    el.className = `toast show ${type}`;
+    setTimeout(() => { if (el.className.includes('show')) el.className = 'toast'; }, 5000);
+}
+
+// ===== CONTRACTS MANAGEMENT =====
+const CONTRACTS_STORAGE_KEY = 'maintenanceContracts';
+let contracts = [];
+let currentContractFile = null;
+let editingContractId = null;
+
+async function loadContracts() {
+    // Tentar carregar do MongoDB (fonte única de verdade)
+    const userId = localStorage.getItem('user-id') || 'admin';
+    let mongodbEmpty = false;
+    if (API_URL_MANUT && userId) {
+        try {
+            const resp = await fetch(`${API_URL_MANUT}/api/sync/${userId}`);
+            if (resp.ok) {
+                const data = await resp.json();
+                if (Array.isArray(data.contracts) && data.contracts.length > 0) {
+                    // MongoDB tem contratos — usar como fonte principal
+                    contracts = data.contracts;
+                    let migrated = false;
+                    contracts = contracts.map(c => {
+                        if (c.renewed === undefined) { migrated = true; return { ...c, renewed: false }; }
+                        return c;
+                    });
+                    try { localStorage.setItem(CONTRACTS_STORAGE_KEY, JSON.stringify(contracts)); } catch(e) {}
+                    if (migrated) saveContractsToCloud();
+                    console.log(`✅ ${contracts.length} contratos carregados do MongoDB`);
+                    return;
+                } else {
+                    // MongoDB respondeu mas está vazio → sinalizar para migração automática
+                    mongodbEmpty = true;
+                }
+            }
+        } catch(e) {
+            console.warn('⚠️ Falha ao carregar contratos do MongoDB, usando cache local:', e.message);
+        }
+    }
+    // Fallback: localStorage (cache local ou dados offline)
+    const stored = localStorage.getItem(CONTRACTS_STORAGE_KEY);
+    contracts = stored ? JSON.parse(stored) : [];
+    let needsMigration = false;
+    contracts = contracts.map(contract => {
+        if (contract.renewed === undefined) {
+            needsMigration = true;
+            return { ...contract, renewed: false };
+        }
+        return contract;
+    });
+    if (needsMigration) {
+        saveContractsToStorage();
+        console.log('Contratos migrados para incluir campo renewed');
+    }
+    // MIGRAÇÃO AUTOMÁTICA: se MongoDB estava vazio e há contratos locais, enviar para nuvem
+    if (mongodbEmpty && contracts.length > 0) {
+        console.log(`🔄 Migrando ${contracts.length} contratos do localStorage para o MongoDB...`);
+        saveContractsToCloud().then(() => {
+            console.log(`✅ ${contracts.length} contratos migrados para o MongoDB com sucesso!`);
+        }).catch(e => {
+            console.error('❌ Falha na migração automática:', e);
+        });
+    }
+    console.log(`📦 ${contracts.length} contratos carregados do cache local`);
+}
+
+function saveContractsToStorage() {
+    // Salvar no localStorage (cache local)
+    try {
+        // Salvar versão SEM base64 no localStorage para não exceder limite
+        const contractsForStorage = contracts.map(c => {
+            if (c.file && c.file.data && c.file.url) {
+                const { data, ...fileWithoutData } = c.file;
+                return { ...c, file: fileWithoutData };
+            }
+            return c;
+        });
+        localStorage.setItem(CONTRACTS_STORAGE_KEY, JSON.stringify(contractsForStorage));
+    } catch(e) {
+        console.warn('Não foi possível salvar contratos no cache local:', e.message);
+    }
+    // Salvar no MongoDB (fonte principal — disponível em todos os dispositivos)
+    saveContractsToCloud();
+}
+
+async function saveContractsToCloud() {
+    const userId = localStorage.getItem('user-id') || 'admin';
+    if (!API_URL_MANUT || !userId) return;
+    try {
+        // Remover base64 antes de salvar no MongoDB (arquivos já estão no Cloudinary com .url)
+        const contractsForCloud = contracts.map(c => {
+            if (c.file && c.file.data) {
+                const { data, ...fileWithoutData } = c.file;
+                return { ...c, file: fileWithoutData };
+            }
+            return c;
+        });
+        const resp = await fetch(`${API_URL_MANUT}/api/sync`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, contracts: contractsForCloud })
+        });
+        if (resp.ok) {
+            console.log(`✅ ${contractsForCloud.length} contratos salvos no MongoDB`);
+        } else {
+            console.error('Erro ao salvar contratos na nuvem:', resp.status);
+        }
+    } catch(e) {
+        console.error('Falha ao salvar contratos no MongoDB:', e.message);
+    }
+}
+
+async function openContractsModal() {
+    await loadContracts();
+    updateContractsDashboard();
+    filterContracts();
+    checkContractAlerts();
+    document.getElementById('contractsModal').classList.add('active');
+}
+
+function closeContractsModal() {
+    document.getElementById('contractsModal').classList.remove('active');
+    clearContractForm();
+}
+
+function clearContractForm() {
+    document.getElementById('contractForm').reset();
+    document.getElementById('contractFilePreview').innerHTML = '';
+    currentContractFile = null;
+    editingContractId = null;
+    document.getElementById('saveContractBtn').innerHTML = '<i class="fas fa-save"></i> Salvar Contrato';
+}
+
+function formatCurrency(input) {
+    let value = input.value.replace(/\D/g, '');
+    value = (value / 100).toFixed(2);
+    value = value.replace('.', ',');
+    value = value.replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1.');
+    input.value = 'R$ ' + value;
+}
+
+function handleContractFileUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Validar tamanho - reduzir para 2MB para evitar problemas de quota
+    const maxSize = 2 * 1024 * 1024; // 2MB
+    if (file.size > maxSize) {
+        const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+        showToast(`Arquivo muito grande (${fileSizeMB}MB). Máximo: 2MB. Comprima o arquivo antes de anexar.`, 'error');
+        event.target.value = '';
+        return;
+    }
+
+    // Avisar se o arquivo é grande (> 500KB)
+    if (file.size > 500 * 1024) {
+        const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+        console.warn(`⚠️ Arquivo grande: ${fileSizeMB}MB. Considere comprimir para economizar espaço.`);
+    }
+
+    // Validar tipo
+    const validTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+    if (!validTypes.includes(file.type)) {
+        showToast('Tipo de arquivo inválido. Use PDF, JPG ou PNG', 'error');
+        event.target.value = '';
+        return;
+    }
+
+    currentContractFile = file;
+
+    // Preview
+    const preview = document.getElementById('contractFilePreview');
+    const fileIcon = file.type === 'application/pdf' ? 'fa-file-pdf' : 'fa-file-image';
+    const fileSize = (file.size / 1024).toFixed(1) + ' KB';
+
+    preview.innerHTML = `
+        <div class="contract-file-preview">
+            <i class="fas ${fileIcon}"></i>
+            <div class="file-info">
+                <div class="file-name">${file.name}</div>
+                <div class="file-size">${fileSize}</div>
+            </div>
+            <button type="button" class="btn btn-secondary" onclick="removeContractFile()"
+                    style="padding: 6px 12px; font-size: 12px;">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `;
+}
+
+function removeContractFile() {
+    currentContractFile = null;
+    document.getElementById('contractFile').value = '';
+    document.getElementById('contractFilePreview').innerHTML = '';
+}
+
+async function saveContract(event) {
+    event.preventDefault();
+
+    const company = document.getElementById('contractCompany').value.trim();
+    const responsible = document.getElementById('contractResponsible').value.trim();
+    const phone = document.getElementById('contractPhone').value.trim();
+    const startDate = document.getElementById('contractStartDate').value;
+    const endDate = document.getElementById('contractEndDate').value;
+    const costStr = document.getElementById('contractCost').value;
+    const description = document.getElementById('contractDescription').value.trim();
+
+    // Validar datas
+    if (new Date(startDate) >= new Date(endDate)) {
+        showToast('Data de fim deve ser posterior à data de início', 'error');
+        return;
+    }
+
+    // Converter custo
+    const cost = parseFloat(costStr.replace(/[R$\s.]/g, '').replace(',', '.'));
+
+    const saveBtn = document.getElementById('saveContractBtn');
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+
+    try {
+        const userId = localStorage.getItem('user-id') || 'admin';
+        let fileData = null;
+
+        // Upload do arquivo para Cloudinary se houver
+        if (currentContractFile) {
+            // Se currentContractFile já tem url (é do Cloudinary), usar diretamente
+            if (currentContractFile.url) {
+                fileData = currentContractFile;
+            } else {
+                // Se é um arquivo novo (File object), fazer upload para Cloudinary
+                showToast('Enviando arquivo para nuvem...', 'warning');
+
+                const base64 = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(currentContractFile);
+                });
+
+                // Upload para Cloudinary via API
+                if (API_URL_MANUT) {
+                    const uploadResponse = await fetch(`${API_URL_MANUT}/api/upload`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            file: base64,
+                            filename: currentContractFile.name,
+                            userId
+                        })
+                    });
+
+                    const uploadResult = await uploadResponse.json();
+
+                    if (uploadResult.success) {
+                        fileData = {
+                            name: currentContractFile.name,
+                            type: currentContractFile.type,
+                            size: currentContractFile.size,
+                            url: uploadResult.url,
+                            publicId: uploadResult.publicId
+                        };
+                        console.log('✅ Arquivo enviado para Cloudinary:', uploadResult.url);
+                    } else {
+                        throw new Error('Falha no upload para o servidor');
+                    }
+                } else {
+                    // Fallback: salvar em base64 se API não estiver disponível
+                    console.warn('⚠️ API não disponível, salvando em base64 (não recomendado)');
+                    fileData = {
+                        name: currentContractFile.name,
+                        type: currentContractFile.type,
+                        size: currentContractFile.size,
+                        data: base64
+                    };
+                }
+            }
+        } else if (editingContractId) {
+            // Se está editando e não mudou o arquivo, manter o arquivo original
+            const existingContract = contracts.find(c => c.id === editingContractId);
+            fileData = existingContract?.file || null;
+        }
+
+        const contract = {
+            id: editingContractId || Date.now().toString(),
+            company,
+            responsible,
+            phone,
+            startDate,
+            endDate,
+            cost,
+            description,
+            file: fileData,
+            createdAt: editingContractId ? (contracts.find(c => c.id === editingContractId)?.createdAt || new Date().toISOString()) : new Date().toISOString(),
+            renewed: editingContractId ? (contracts.find(c => c.id === editingContractId)?.renewed || false) : false
+        };
+
+        if (editingContractId) {
+            console.log('=== EDITANDO CONTRATO ===');
+            console.log('ID editado:', editingContractId);
+            const index = contracts.findIndex(c => c.id === editingContractId);
+            console.log('Índice encontrado:', index);
+            console.log('Dados do contrato:', contract);
+            contracts[index] = contract;
+            showToast('Contrato atualizado com sucesso!', 'success');
+            console.log('=== EDIÇÃO CONCLUÍDA ===');
+        } else {
+            console.log('=== CRIANDO NOVO CONTRATO ===');
+            console.log('Dados do contrato:', contract);
+            contracts.push(contract);
+            showToast('Contrato cadastrado com sucesso!', 'success');
+            console.log('=== CRIAÇÃO CONCLUÍDA ===');
+        }
+
+        saveContractsToStorage();
+        renderContractsList();
+        clearContractForm();
+
+    } catch (error) {
+        console.error('Erro ao salvar contrato:', error);
+        showToast('Erro ao salvar contrato', 'error');
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i class="fas fa-save"></i> Salvar Contrato';
+    }
+}
+
+function renderContractsList() {
+    updateContractsDashboard();
+    filterContracts();
+}
+
+function viewContractFile(contractId) {
+    const contract = contracts.find(c => c.id === contractId);
+    if (!contract || !contract.file) return;
+
+    // Determinar a URL do arquivo (Cloudinary ou base64)
+    const fileUrl = contract.file.url || contract.file.data;
+
+    // Se for URL do Cloudinary, abrir diretamente
+    if (contract.file.url) {
+        window.open(fileUrl, '_blank');
+        return;
+    }
+
+    // Se for base64 (legado), abrir em nova aba com HTML customizado
+    const win = window.open();
+    win.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>${contract.file.name} - ${contract.company}</title>
+            <style>
+                body { margin: 0; padding: 20px; background: #2c3e50; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+                img { max-width: 100%; height: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+                iframe { width: 100%; height: 90vh; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+            </style>
+        </head>
+        <body>
+            ${contract.file.type === 'application/pdf'
+                ? `<iframe src="${contract.file.data}"></iframe>`
+                : `<img src="${contract.file.data}" alt="${contract.file.name}">`
+            }
+        </body>
+        </html>
+    `);
+}
+
+function editContract(contractId) {
+    const contract = contracts.find(c => c.id === contractId);
+    if (!contract) return;
+
+    editingContractId = contractId;
+
+    document.getElementById('contractCompany').value = contract.company;
+    document.getElementById('contractResponsible').value = contract.responsible || '';
+    document.getElementById('contractPhone').value = contract.phone || '';
+    document.getElementById('contractStartDate').value = contract.startDate;
+    document.getElementById('contractEndDate').value = contract.endDate;
+    document.getElementById('contractCost').value = contract.cost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    document.getElementById('contractDescription').value = contract.description || '';
+
+    if (contract.file) {
+        const fileIcon = contract.file.type === 'application/pdf' ? 'fa-file-pdf' : 'fa-file-image';
+        const fileSize = (contract.file.size / 1024).toFixed(1) + ' KB';
+        document.getElementById('contractFilePreview').innerHTML = `
+            <div class="contract-file-preview">
+                <i class="fas ${fileIcon}"></i>
+                <div class="file-info">
+                    <div class="file-name">${contract.file.name}</div>
+                    <div class="file-size">${fileSize}</div>
+                </div>
+                <button type="button" class="btn btn-secondary" onclick="removeContractFile()"
+                        style="padding: 6px 12px; font-size: 12px;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `;
+        currentContractFile = contract.file;
+    }
+
+    document.getElementById('saveContractBtn').innerHTML = '<i class="fas fa-save"></i> Atualizar Contrato';
+
+    // Scroll para o topo do modal
+    document.querySelector('#contractsModal .modal-box').scrollTop = 0;
+}
+
+function deleteContract(contractId) {
+    const contract = contracts.find(c => c.id === contractId);
+    if (!contract) return;
+
+    if (!confirm(`Tem certeza que deseja excluir o contrato com ${contract.company}?`)) return;
+
+    contracts = contracts.filter(c => c.id !== contractId);
+    saveContractsToStorage();
+    renderContractsList();
+    updateContractsDashboard();
+    showToast('Contrato excluído com sucesso!', 'success');
+}
+
+// ===== NEW FUNCTIONS =====
+
+// Format phone number
+function formatPhone(input) {
+    let value = input.value.replace(/\D/g, '');
+    if (value.length <= 10) {
+        value = value.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
+    } else {
+        value = value.replace(/(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3');
+    }
+    input.value = value;
+}
+
+// Update dashboard statistics
+function updateContractsDashboard() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const in30Days = new Date(today);
+    in30Days.setDate(in30Days.getDate() + 30);
+
+    const totalContracts = contracts.length;
+
+    // Apenas contratos ativos (não vencidos e não renovados) no custo total
+    const activeContractsForCost = contracts.filter(c => {
+        const endDate = new Date(c.endDate);
+        return endDate >= today && !c.renewed;
+    });
+    const totalCost = activeContractsForCost.reduce((sum, c) => sum + c.cost, 0);
+
+    const activeContracts = contracts.filter(c => {
+        const endDate = new Date(c.endDate);
+        return endDate >= today && !c.renewed;
+    }).length;
+
+    const expiringContracts = contracts.filter(c => {
+        const endDate = new Date(c.endDate);
+        return endDate >= today && endDate <= in30Days && !c.renewed;
+    }).length;
+
+    document.getElementById('dashboardTotalContracts').textContent = totalContracts;
+    document.getElementById('dashboardTotalCost').textContent = totalCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    document.getElementById('dashboardActiveContracts').textContent = activeContracts;
+    document.getElementById('dashboardExpiringContracts').textContent = expiringContracts;
+}
+
+// Filter contracts
+let allContracts = [];
+
+function filterContracts() {
+    const searchTerm = document.getElementById('contractSearchInput').value.toLowerCase();
+    const statusFilter = document.getElementById('contractStatusFilter').value;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let filtered = contracts.filter(contract => {
+        // Search filter
+        const matchesSearch = contract.company.toLowerCase().includes(searchTerm) ||
+                            (contract.responsible && contract.responsible.toLowerCase().includes(searchTerm));
+
+        if (!matchesSearch) return false;
+
+        // Status filter
+        if (!statusFilter) return true;
+
+        // Filtro para contratos renovados
+        if (statusFilter === 'renewed') {
+            return contract.renewed === true;
+        }
+
+        const endDate = new Date(contract.endDate);
+        const daysUntilExpiration = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
+
+        // Contratos renovados não aparecem em outros filtros
+        if (contract.renewed) return false;
+
+        if (statusFilter === 'active' && daysUntilExpiration > 30) return true;
+        if (statusFilter === 'expiring' && daysUntilExpiration >= 0 && daysUntilExpiration <= 30) return true;
+        if (statusFilter === 'expired' && daysUntilExpiration < 0) return true;
+
+        return false;
+    });
+
+    allContracts = filtered;
+    renderFilteredContracts(filtered);
+}
+
+function renderFilteredContracts(filtered) {
+    const container = document.getElementById('contractsList');
+
+    if (filtered.length === 0) {
+        container.innerHTML = `
+            <div class="contracts-empty">
+                <i class="fas fa-search"></i>
+                <p>Nenhum contrato encontrado</p>
+                <small>Tente ajustar os filtros de busca</small>
+            </div>
+        `;
+        return;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const html = filtered
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        .map(contract => {
+            const endDate = new Date(contract.endDate);
+            const daysUntilExpiration = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
+
+            let statusClass = 'active';
+            let statusText = 'Ativo';
+
+            // Verificar se foi renovado primeiro
+            if (contract.renewed) {
+                statusClass = 'renewed';
+                statusText = 'Renovado';
+            } else if (daysUntilExpiration < 0) {
+                statusClass = 'expired';
+                statusText = 'Vencido';
+            } else if (daysUntilExpiration <= 30) {
+                statusClass = 'expiring';
+                statusText = 'A Vencer';
+            }
+
+            const costFormatted = contract.cost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+            return `
+                <div class="contract-card">
+                    <div class="contract-info">
+                        <div class="contract-header">
+                            <div class="contract-company">${contract.company}</div>
+                            <div class="contract-status ${statusClass}">${statusText}</div>
+                        </div>
+
+                        ${contract.description ? `<p style="color: #7f8c8d; font-size: 13px; margin: 8px 0;">${contract.description}</p>` : ''}
+
+                        <div class="contract-details">
+                            <div class="contract-detail-item">
+                                <i class="fas fa-user"></i>
+                                Responsável: <strong>${contract.responsible || '-'}</strong>
+                            </div>
+                            <div class="contract-detail-item">
+                                <i class="fas fa-phone"></i>
+                                Telefone: <strong>${contract.phone || '-'}</strong>
+                            </div>
+                            <div class="contract-detail-item">
+                                <i class="fas fa-calendar-alt"></i>
+                                Vigência: <strong>${formatDate(contract.startDate)} - ${formatDate(contract.endDate)}</strong>
+                            </div>
+                            <div class="contract-detail-item">
+                                <i class="fas fa-dollar-sign"></i>
+                                Custo Mensal: <strong>${costFormatted}</strong>
+                            </div>
+                            ${daysUntilExpiration >= 0 ? `
+                            <div class="contract-detail-item">
+                                <i class="fas fa-clock"></i>
+                                ${daysUntilExpiration === 0 ? 'Vence hoje' : `Vence em <strong>${daysUntilExpiration} dia(s)</strong>`}
+                            </div>
+                            ` : `
+                            <div class="contract-detail-item">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                Vencido há <strong>${Math.abs(daysUntilExpiration)} dia(s)</strong>
+                            </div>
+                            `}
+                            ${contract.file ? `
+                            <div class="contract-detail-item">
+                                <i class="fas fa-paperclip"></i>
+                                Arquivo: <strong>${contract.file.name}</strong>
+                            </div>
+                            ` : ''}
+                        </div>
+                    </div>
+
+                    <div class="contract-actions">
+                        ${contract.file ? `
+                        <button class="btn-contract-action" onclick="viewContractFile('${contract.id}')">
+                            <i class="fas fa-eye"></i> Ver Arquivo
+                        </button>
+                        ` : ''}
+                        ${!contract.renewed ? `
+                        <button class="btn-contract-action" onclick="renewContract('${contract.id}')">
+                            <i class="fas fa-sync-alt"></i> Renovar
+                        </button>
+                        ` : ''}
+                        <button class="btn-contract-action" onclick="editContract('${contract.id}')">
+                            <i class="fas fa-edit"></i> Editar
+                        </button>
+                        <button class="btn-contract-action delete" onclick="deleteContract('${contract.id}')">
+                            <i class="fas fa-trash"></i> Excluir
+                        </button>
+                    </div>
+                </div>
+            `;
+        })
+        .join('');
+
+    container.innerHTML = html;
+}
+
+function clearContractFilters() {
+    document.getElementById('contractSearchInput').value = '';
+    document.getElementById('contractStatusFilter').value = '';
+    filterContracts();
+}
+
+// Função para limpar arquivos de contratos antigos/renovados
+function cleanOldContractFiles() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Contar contratos com arquivos
+    const contractsWithFiles = contracts.filter(c => c.file);
+    const renewedWithFiles = contractsWithFiles.filter(c => c.renewed);
+    const expiredWithFiles = contractsWithFiles.filter(c => {
+        const endDate = new Date(c.endDate);
+        const daysExpired = Math.ceil((today - endDate) / (1000 * 60 * 60 * 24));
+        return daysExpired > 365 && !c.renewed; // Vencido há mais de 1 ano
+    });
+
+    const totalToClean = renewedWithFiles.length + expiredWithFiles.length;
+
+    if (totalToClean === 0) {
+        alert('Não há arquivos de contratos antigos para limpar.');
+        return;
+    }
+
+    const message =
+        `Encontrados ${totalToClean} contratos com arquivos que podem ser removidos:\n\n` +
+        `• ${renewedWithFiles.length} contratos renovados\n` +
+        `• ${expiredWithFiles.length} contratos vencidos há mais de 1 ano\n\n` +
+        `Os dados dos contratos serão mantidos, apenas os ARQUIVOS ANEXOS serão removidos.\n\n` +
+        `Deseja continuar?`;
+
+    if (!confirm(message)) return;
+
+    let cleanedCount = 0;
+    const filesToDelete = []; // Arquivos do Cloudinary para deletar
+
+    contracts = contracts.map(contract => {
+        const shouldClean =
+            (contract.renewed && contract.file) ||
+            (contract.file && (() => {
+                const endDate = new Date(contract.endDate);
+                const daysExpired = Math.ceil((today - endDate) / (1000 * 60 * 60 * 24));
+                return daysExpired > 365 && !contract.renewed;
+            })());
+
+        if (shouldClean) {
+            cleanedCount++;
+
+            // Se o arquivo está no Cloudinary, adicionar à lista de exclusão
+            if (contract.file && contract.file.publicId) {
+                filesToDelete.push({
+                    publicId: contract.file.publicId,
+                    resourceType: contract.file.type === 'application/pdf' ? 'raw' : 'image'
+                });
+            }
+
+            return { ...contract, file: null };
+        }
+        return contract;
+    });
+
+    // Deletar arquivos do Cloudinary
+    if (filesToDelete.length > 0 && API_URL_MANUT) {
+        filesToDelete.forEach(async (file) => {
+            try {
+                await fetch(`${API_URL_MANUT}/api/upload`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(file)
+                });
+                console.log('✅ Arquivo deletado do Cloudinary:', file.publicId);
+            } catch (error) {
+                console.error('Erro ao deletar arquivo do Cloudinary:', error);
+            }
+        });
+    }
+
+    saveContractsToStorage();
+    renderContractsList();
+
+    // Calcular espaço liberado estimado
+    const dataSize = new Blob([JSON.stringify(contracts)]).size;
+    const sizeMB = (dataSize / (1024 * 1024)).toFixed(2);
+
+    showToast(`${cleanedCount} arquivos removidos com sucesso! Armazenamento local: ${sizeMB}MB`, 'success');
+}
+
+// Renew contract
+function renewContract(contractId) {
+    console.log('=== RENOVANDO CONTRATO ===');
+    console.log('ID:', contractId);
+    const contract = contracts.find(c => c.id === contractId);
+    if (!contract) {
+        console.error('Contrato não encontrado');
+        return;
+    }
+
+    console.log('Contrato encontrado:', contract.company);
+    console.log('Campo renewed:', contract.renewed);
+
+    // Verificar se já foi renovado
+    if (contract.renewed) {
+        console.warn('Contrato já foi renovado anteriormente');
+        showToast('Este contrato já foi renovado!', 'warning');
+        return;
+    }
+
+    const currentEndDate = new Date(contract.endDate);
+    const newStartDate = new Date(currentEndDate);
+    newStartDate.setDate(newStartDate.getDate() + 1);
+
+    const newEndDate = new Date(newStartDate);
+    newEndDate.setFullYear(newEndDate.getFullYear() + 1);
+
+    const message = `Renovar contrato com ${contract.company}?\n\nNova vigência:\nInício: ${formatDate(newStartDate.toISOString().split('T')[0])}\nFim: ${formatDate(newEndDate.toISOString().split('T')[0])}`;
+
+    if (!confirm(message)) return;
+
+    // Marcar contrato atual como renovado
+    const index = contracts.findIndex(c => c.id === contractId);
+    console.log('Marcando contrato como renovado, índice:', index);
+    contracts[index].renewed = true;
+
+    // Criar novo contrato
+    const newContract = {
+        ...contract,
+        id: Date.now().toString(),
+        startDate: newStartDate.toISOString().split('T')[0],
+        endDate: newEndDate.toISOString().split('T')[0],
+        createdAt: new Date().toISOString(),
+        renewed: false  // Novo contrato não está renovado
+    };
+
+    console.log('Novo contrato criado:', newContract);
+    contracts.push(newContract);
+    saveContractsToStorage();
+    renderContractsList();
+    updateContractsDashboard();
+    showToast('Contrato renovado com sucesso!', 'success');
+    console.log('=== RENOVAÇÃO CONCLUÍDA ===');
+}
+
+// Export to PDF
+async function exportContractsToPDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 15;
+    let yPos = margin;
+
+    // Header
+    doc.setFontSize(18);
+    doc.setTextColor(44, 62, 80);
+    doc.text('Relatório de Contratos de Manutenção', margin, yPos);
+    yPos += 10;
+
+    doc.setFontSize(10);
+    doc.setTextColor(127, 140, 141);
+    doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`, margin, yPos);
+    yPos += 10;
+
+    // Summary
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const totalCost = contracts.reduce((sum, c) => sum + c.cost, 0);
+    const activeContracts = contracts.filter(c => new Date(c.endDate) >= today).length;
+
+    doc.setFontSize(11);
+    doc.setTextColor(44, 62, 80);
+    doc.text(`Total de Contratos: ${contracts.length}`, margin, yPos);
+    yPos += 6;
+    doc.text(`Contratos Ativos: ${activeContracts}`, margin, yPos);
+    yPos += 6;
+    doc.text(`Custo Mensal Total: ${totalCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`, margin, yPos);
+    yPos += 12;
+
+    // Line separator
+    doc.setDrawColor(189, 195, 199);
+    doc.line(margin, yPos, pageWidth - margin, yPos);
+    yPos += 10;
+
+    // Contracts list
+    const contractsToExport = allContracts.length > 0 ? allContracts : contracts;
+
+    for (let i = 0; i < contractsToExport.length; i++) {
+        const contract = contractsToExport[i];
+
+        // Check if need new page
+        if (yPos > pageHeight - 60) {
+            doc.addPage();
+            yPos = margin;
+        }
+
+        const endDate = new Date(contract.endDate);
+        const daysUntilExpiration = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
+
+        let statusText = 'Ativo';
+        let statusColor = [39, 174, 96]; // Green
+
+        if (daysUntilExpiration < 0) {
+            statusText = 'Vencido';
+            statusColor = [231, 76, 60]; // Red
+        } else if (daysUntilExpiration <= 30) {
+            statusText = 'A Vencer';
+            statusColor = [243, 156, 18]; // Orange
+        }
+
+        // Company name and status
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.setTextColor(44, 62, 80);
+        doc.text(`${i + 1}. ${contract.company}`, margin, yPos);
+
+        doc.setFontSize(9);
+        doc.setFont(undefined, 'normal');
+        doc.setTextColor(...statusColor);
+        doc.text(`[${statusText}]`, margin + 100, yPos);
+        yPos += 6;
+
+        // Details
+        doc.setFontSize(9);
+        doc.setTextColor(127, 140, 141);
+
+        if (contract.responsible) {
+            doc.text(`Responsável: ${contract.responsible}`, margin + 5, yPos);
+            yPos += 5;
+        }
+
+        if (contract.phone) {
+            doc.text(`Telefone: ${contract.phone}`, margin + 5, yPos);
+            yPos += 5;
+        }
+
+        doc.text(`Vigência: ${formatDate(contract.startDate)} a ${formatDate(contract.endDate)}`, margin + 5, yPos);
+        yPos += 5;
+
+        doc.text(`Custo Mensal: ${contract.cost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`, margin + 5, yPos);
+        yPos += 5;
+
+        if (contract.description) {
+            const lines = doc.splitTextToSize(`Descrição: ${contract.description}`, pageWidth - 2 * margin - 10);
+            doc.text(lines, margin + 5, yPos);
+            yPos += lines.length * 5;
+        }
+
+        yPos += 8;
+    }
+
+    // Footer
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(149, 165, 166);
+        doc.text(`Página ${i} de ${pageCount}`, pageWidth - margin - 30, pageHeight - 10);
+        doc.text('Sistema de Gestão Casa DW', margin, pageHeight - 10);
+    }
+
+    doc.save(`contratos_manutencao_${new Date().toISOString().split('T')[0]}.pdf`);
+    showToast('PDF exportado com sucesso!', 'success');
+}
+
+// Check for expiring contracts and show alerts
+function checkContractAlerts() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const in30Days = new Date(today);
+    in30Days.setDate(in30Days.getDate() + 30);
+
+    const expiring = contracts.filter(c => {
+        const endDate = new Date(c.endDate);
+        return endDate >= today && endDate <= in30Days;
+    });
+
+    const expired = contracts.filter(c => new Date(c.endDate) < today);
+
+    if (expired.length > 0 || expiring.length > 0) {
+        let message = '';
+        if (expired.length > 0) {
+            message += `⚠️ ${expired.length} contrato(s) vencido(s)!\n`;
+        }
+        if (expiring.length > 0) {
+            message += `⏰ ${expiring.length} contrato(s) vence(m) em até 30 dias!`;
+        }
+
+        // Show toast notification
+        setTimeout(() => {
+            showToast(message, 'warning');
+        }, 1000);
+    }
+}

@@ -1,0 +1,2142 @@
+
+// ===== VERIFICAÇÃO DE PERMISSÃO FROTA =====
+function checkFrotaPerm(action) {
+    if (window.perm && !window.perm('frota', action)) {
+        alert('Você não tem permissão para ' + action + ' na Frota.');
+        return false;
+    }
+    return true;
+}
+
+function applyFrotaPermissions() {
+    const canIncluir  = !window.perm || window.perm('frota', 'incluir');
+    const canEditar   = !window.perm || window.perm('frota', 'editar');
+    const canExcluir  = !window.perm || window.perm('frota', 'excluir');
+
+    // Ocultar botão de adicionar veículo
+    ['addVehicleBtn', 'addVehicle', 'btnAddVehicle'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.style.display = canIncluir ? '' : 'none'; }
+    });
+
+    if (!canEditar || !canExcluir) {
+        if (!document.getElementById('frotaPermStyle')) {
+            const s = document.createElement('style');
+            s.id = 'frotaPermStyle';
+            s.textContent = `
+                ${!canEditar  ? '.btn-edit-vehicle, .vehicle-edit-btn { display:none!important; }' : ''}
+                ${!canExcluir ? '.btn-delete-vehicle, .vehicle-delete-btn { display:none!important; }' : ''}
+                ${(!canEditar && !canExcluir) ? '.vehicle-actions { display:none!important; }' : ''}
+            `;
+            document.head.appendChild(s);
+        }
+    }
+}
+
+// ==============================
+// Gerenciamento de Frota - DW Administradora
+// ==============================
+
+const FLEET_STORAGE_KEY = 'fleetData';
+
+// ===== FUNÇÃO PARA ADICIONAR DESPESA (INTEGRAÇÃO COM DASHBOARD) =====
+// Esta função permite que o módulo Frota adicione despesas diretamente no sistema financeiro
+if (typeof window.addExpenseFromExternal !== 'function') {
+    window.addExpenseFromExternal = async function(expenseData) {
+        try {
+            console.log('📝 [Frota] Adicionando despesa ao Dashboard:', expenseData);
+
+            // Validar campos obrigatórios
+            if (!expenseData.date || !expenseData.description || !expenseData.amount) {
+                throw new Error('Campos obrigatórios faltando: date, description, amount');
+            }
+
+            // Criar objeto de despesa
+            const expense = {
+                date: expenseData.date,
+                description: expenseData.description,
+                category: expenseData.category || 'Outros',
+                supplier: expenseData.supplier || '',
+                amount: parseFloat(expenseData.amount),
+                paymentMethod: expenseData.paymentMethod || 'Pix',
+                dueDate: expenseData.dueDate || expenseData.date,
+                notes: expenseData.notes || '',
+                receiptPDF: expenseData.receiptPDF || null
+            };
+
+            // Determinar mês a partir da data
+            const month = expense.date ? parseInt(expense.date.substring(5, 7)) - 1 : new Date().getMonth();
+
+            console.log('📅 Mês calculado:', month, '(índice do mês no array)');
+
+            // Verificar se CloudStorage está disponível
+            if (window.CloudStorage) {
+                console.log('☁️ Usando CloudStorage para salvar despesa');
+
+                // Carregar dados atuais da nuvem
+                const financialData = await window.CloudStorage.loadAll();
+
+                if (!financialData) {
+                    throw new Error('Erro ao carregar dados financeiros da nuvem');
+                }
+
+                // Garantir que a estrutura existe
+                if (!financialData.expenses) {
+                    financialData.expenses = {};
+                    for (let i = 0; i < 12; i++) {
+                        financialData.expenses[i] = [];
+                    }
+                }
+
+                // Garantir que o array do mês existe
+                if (!financialData.expenses[month]) {
+                    console.log('🆕 Criando array para mês', month);
+                    financialData.expenses[month] = [];
+                }
+
+                // Adicionar despesa ao mês correto
+                financialData.expenses[month].push(expense);
+
+                console.log('✅ Despesa adicionada ao mês', month);
+                console.log('📊 Total de despesas no mês:', financialData.expenses[month].length);
+
+                // Salvar na nuvem
+                const saved = await window.CloudStorage.saveAll(financialData);
+
+                if (saved) {
+                    console.log('☁️ Despesa salva na nuvem com sucesso!');
+                    return true;
+                } else {
+                    throw new Error('Erro ao salvar despesa na nuvem');
+                }
+            } else {
+                console.warn('⚠️ CloudStorage não disponível, usando localStorage');
+
+                // Fallback: usar localStorage
+                let financialData = JSON.parse(localStorage.getItem('financialData') || '{}');
+
+                if (!financialData.expenses) {
+                    financialData.expenses = {};
+                    for (let i = 0; i < 12; i++) {
+                        financialData.expenses[i] = [];
+                    }
+                }
+
+                if (!financialData.expenses[month]) {
+                    financialData.expenses[month] = [];
+                }
+
+                financialData.expenses[month].push(expense);
+                localStorage.setItem('financialData', JSON.stringify(financialData));
+
+                console.log('💾 Despesa salva no localStorage (fallback)');
+                return true;
+            }
+        } catch (error) {
+            console.error('❌ Erro ao adicionar despesa externa:', error);
+            throw error;
+        }
+    };
+    console.log('✅ Função addExpenseFromExternal registrada no módulo Frota');
+}
+
+// Initial data from spreadsheet
+const initialFleetData = {
+    updateDate: '10/01/2026',
+    vehicles: [
+        {
+            marca: 'TOYOTA',
+            modelo: 'COROLLA XEI 2.0',
+            ano: '2018/2019',
+            placa: 'BZA1B19',
+            chassi: '9BRBD3HE9K0398237',
+            renavam: '1163141116',
+            proxRevisao: '2026-03-26',
+            proxRevisaoKm: '86.500',
+            oficina: 'RIOZEN BARRA (21) 96499-7752 EDMILSON',
+            blindagem: 'SIM',
+            revBlindagem: '2025-01-18',
+            seguradora: 'YELUM',
+            kmAtual: '82.322',
+            observacoes: '',
+            kmHistory: []
+        },
+        {
+            marca: 'TOYOTA',
+            modelo: 'HILUX SW4',
+            ano: '2016/2016',
+            placa: 'QEU9B00',
+            chassi: '8AJBU3FS5G0020177',
+            renavam: '1095333574',
+            proxRevisao: '2025-10-01',
+            proxRevisaoKm: '98.920',
+            oficina: '',
+            blindagem: 'SIM',
+            revBlindagem: '2024-12-26',
+            seguradora: 'YELUM',
+            kmAtual: '97.352',
+            observacoes: 'EMPRESTADO KDW EM 08/12/2025',
+            kmHistory: []
+        },
+        {
+            marca: 'MERCEDES',
+            modelo: 'EQC400 4M (100% ELÉTRICO)',
+            ano: '2020/2020',
+            placa: 'AKD5A19',
+            chassi: 'W1K8P9AW2LF012258',
+            renavam: '1249166591',
+            proxRevisao: '2026-07-30',
+            proxRevisaoKm: '51.119',
+            oficina: 'AB INTERCAR (21) 96445-6627 ALEXANDRE',
+            blindagem: 'SIM',
+            revBlindagem: '2025-05-09',
+            seguradora: 'YELUM',
+            kmAtual: '42.282',
+            observacoes: 'OFICINA MERCEDES 26/11/2025',
+            kmHistory: []
+        },
+        {
+            marca: 'MERCEDES',
+            modelo: 'GLB200 PROGRESSIVE 1.3',
+            ano: '2020/2021',
+            placa: 'FPD4C08',
+            chassi: 'W1N4M8HW3MW106970',
+            renavam: '1256798352',
+            proxRevisao: '2027-01-05',
+            proxRevisaoKm: '39.411',
+            oficina: '',
+            blindagem: 'SIM',
+            revBlindagem: '2025-04-18',
+            seguradora: 'PORTO SEGURO',
+            kmAtual: '29.445',
+            observacoes: '',
+            kmHistory: []
+        },
+        {
+            marca: 'HYUNDAI',
+            modelo: 'PALISADE 38GDI SIG',
+            ano: '2024/2025',
+            placa: 'SSB9G10',
+            chassi: 'KMHR381EDSU828694',
+            renavam: '1407401340',
+            proxRevisao: '2026-10-30',
+            proxRevisaoKm: '20.000',
+            oficina: 'CAOA (21) 99863-6432 MARLI',
+            blindagem: 'SIM',
+            revBlindagem: '2025-10-29',
+            seguradora: 'PORTO SEGURO',
+            kmAtual: '12.672',
+            observacoes: '',
+            kmHistory: []
+        },
+        {
+            marca: 'CHERY',
+            modelo: 'TIGGO 8 PRO (HÍBRIDO)',
+            ano: '2024/2025',
+            placa: 'TJY7G62',
+            chassi: 'LNNBBDAT5SD021172',
+            renavam: '1418998394',
+            proxRevisao: '2026-12-26',
+            proxRevisaoKm: '20.000',
+            oficina: 'CHERY (21) 96903-3405 Melissa',
+            blindagem: 'SIM',
+            revBlindagem: '2024-12-28',
+            seguradora: 'TOKIO MARINE',
+            kmAtual: '9.122',
+            observacoes: '',
+            kmHistory: []
+        }
+    ]
+};
+
+let fleetData = JSON.parse(JSON.stringify(initialFleetData));
+let currentHistoryIndex = -1;
+let currentInvoices = []; // Array temporário de notas fiscais durante edição
+let currentAbastecimentos = []; // Array temporário de abastecimentos durante edição
+
+// ---- Initialization ----
+document.addEventListener('DOMContentLoaded', async function() {
+    console.log('DOM loaded, initializing frota...');
+
+    // Mostrar loading enquanto carrega
+    showFrotaLoading();
+
+    await loadFleetData();
+    populateFilters();
+    renderVehicles();
+    updateStatusCards();
+    renderRevisionAlerts();
+    setupEventListeners();
+
+    hideFrotaLoading();
+
+    console.log('Frota initialized successfully');
+});
+
+function showFrotaLoading() {
+    const container = document.querySelector('.frota-container');
+    if (container && !document.getElementById('frotaLoadingOverlay')) {
+        const overlay = document.createElement('div');
+        overlay.id = 'frotaLoadingOverlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            backdrop-filter: blur(4px);
+        `;
+        overlay.innerHTML = `
+            <div style="text-align: center; color: white;">
+                <i class="fas fa-spinner fa-spin fa-3x" style="margin-bottom: 20px;"></i>
+                <p style="font-size: 18px; font-weight: 500;">Carregando frota...</p>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+    }
+}
+
+function hideFrotaLoading() {
+    const overlay = document.getElementById('frotaLoadingOverlay');
+    if (overlay) {
+        overlay.remove();
+    }
+}
+
+function setupEventListeners() {
+    console.log('Setting up event listeners...');
+
+    // Header buttons
+    const btnNovoVeiculo = document.getElementById('btnNovoVeiculo');
+    const btnExportar = document.getElementById('btnExportar');
+    const btnImprimir = document.getElementById('btnImprimir');
+    const btnVoltar = document.getElementById('btnVoltar');
+
+    console.log('Header buttons found:', {
+        btnNovoVeiculo: !!btnNovoVeiculo,
+        btnExportar: !!btnExportar,
+        btnImprimir: !!btnImprimir,
+        btnVoltar: !!btnVoltar
+    });
+
+    if (btnNovoVeiculo) {
+        btnNovoVeiculo.addEventListener('click', function(e) {
+            console.log('Novo Veículo clicked!');
+            e.preventDefault();
+            openVehicleModal();
+        });
+    }
+    if (btnExportar) {
+        btnExportar.addEventListener('click', function(e) {
+            console.log('Exportar clicked!');
+            e.preventDefault();
+            exportFleet();
+        });
+    }
+    if (btnImprimir) {
+        btnImprimir.addEventListener('click', function(e) {
+            console.log('Imprimir clicked!');
+            window.print();
+        });
+    }
+    if (btnVoltar) {
+        btnVoltar.addEventListener('click', function(e) {
+            console.log('Voltar clicked!');
+            window.location.href = 'index.html';
+        });
+    }
+
+    // Modal buttons
+    const btnCloseVehicleModal = document.querySelectorAll('#btnCloseVehicleModal');
+    const btnSaveVehicle = document.getElementById('btnSaveVehicle');
+    const btnCloseDetailModal = document.querySelectorAll('#btnCloseDetailModal');
+    const btnCloseHistoryModal = document.querySelectorAll('#btnCloseHistoryModal');
+    const btnAddKmHistory = document.getElementById('btnAddKmHistory');
+
+    // File upload listeners
+    const vDocumento = document.getElementById('vDocumento');
+
+    if (vDocumento) {
+        vDocumento.addEventListener('change', function(e) {
+            handleFileUpload(e, 'documentoFileName');
+        });
+    }
+
+    console.log('Modal buttons found:', {
+        btnCloseVehicleModal: btnCloseVehicleModal.length,
+        btnSaveVehicle: !!btnSaveVehicle,
+        btnCloseDetailModal: btnCloseDetailModal.length,
+        btnCloseHistoryModal: btnCloseHistoryModal.length,
+        btnAddKmHistory: !!btnAddKmHistory
+    });
+
+    // Handle multiple close buttons with same ID
+    btnCloseVehicleModal.forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            console.log('Close Vehicle Modal clicked!');
+            e.preventDefault();
+            closeVehicleModal();
+        });
+    });
+
+    if (btnSaveVehicle) {
+        btnSaveVehicle.addEventListener('click', function(e) {
+            console.log('Save Vehicle clicked!');
+            e.preventDefault();
+            saveVehicle();
+        });
+    }
+
+    btnCloseDetailModal.forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            console.log('Close Detail Modal clicked!');
+            e.preventDefault();
+            closeDetailModal();
+        });
+    });
+
+    btnCloseHistoryModal.forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            console.log('Close History Modal clicked!');
+            e.preventDefault();
+            closeHistoryModal();
+        });
+    });
+
+    if (btnAddKmHistory) {
+        btnAddKmHistory.addEventListener('click', function(e) {
+            console.log('Add KM History clicked!');
+            e.preventDefault();
+            addKmHistory();
+        });
+    }
+
+    // Filter inputs
+    const searchFilter = document.getElementById('searchFilter');
+    if (searchFilter) searchFilter.addEventListener('input', applyFilters);
+
+    // Filter selects
+    const filterSelects = document.querySelectorAll('.filter-select');
+    filterSelects.forEach(select => {
+        select.addEventListener('change', applyFilters);
+    });
+
+    console.log('Event listeners setup complete');
+}
+
+async function loadFleetData() {
+    try {
+        console.log('☁️ Carregando dados da frota da nuvem...');
+
+        if (window.CloudStorage) {
+            var cloudData = await window.CloudStorage.loadAll();
+            console.log('📦 CloudStorage retornou:', cloudData ? 'dados válidos' : 'null/undefined');
+
+            if (cloudData && cloudData.fleet && cloudData.fleet.vehicles && cloudData.fleet.vehicles.length > 0) {
+                // Copiar dados da nuvem diretamente nas propriedades
+                fleetData.updateDate = cloudData.fleet.updateDate || fleetData.updateDate;
+                fleetData.vehicles = cloudData.fleet.vehicles;
+
+                // Garantir estrutura completa em cada veículo
+                for (var i = 0; i < fleetData.vehicles.length; i++) {
+                    var v = fleetData.vehicles[i];
+                    if (!v.kmHistory) v.kmHistory = [];
+                    if (!v.abastecimentos) v.abastecimentos = [];
+                    if (!v.invoices) v.invoices = [];
+                }
+
+                console.log('✅ Dados da frota carregados da nuvem!');
+                console.log('📊 Total de veículos:', fleetData.vehicles.length);
+                applyFrotaPermissions();
+            } else {
+                // SEGURANCA: NAO sobrescrever dados na nuvem com dados vazios!
+                // Se nao encontrou frota, apenas usar dados iniciais LOCALMENTE
+                // sem salvar na nuvem (para nao apagar dados reais)
+                console.warn("⚠️ Nenhum dado de frota na nuvem ou erro ao carregar.");
+                console.warn("⚠️ Usando dados iniciais apenas localmente (SEM salvar na nuvem).");
+                var init1 = JSON.parse(JSON.stringify(initialFleetData));
+                fleetData.updateDate = init1.updateDate;
+                fleetData.vehicles = init1.vehicles;
+                // NAO chamar saveFleetDataSilent() aqui!
+                // Isso evita sobrescrever dados reais caso o load tenha falhado
+            }
+
+        } else {
+            console.warn('⚠️ CloudStorage não disponível, usando dados iniciais');
+            var init2 = JSON.parse(JSON.stringify(initialFleetData));
+            fleetData.updateDate = init2.updateDate;
+            fleetData.vehicles = init2.vehicles;
+        }
+    } catch (e) {
+        console.error('❌ Erro ao carregar frota:', e.message);
+        // Fallback: manter dados iniciais que já estão em fleetData
+        console.log('✅ Usando dados iniciais como fallback');
+    }
+
+    document.getElementById('updateDate').textContent = 'ATUALIZADO: ' + fleetData.updateDate;
+}
+
+async function saveFleetData() {
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const year = now.getFullYear();
+    fleetData.updateDate = `${day}/${month}/${year}`;
+    document.getElementById('updateDate').textContent = 'ATUALIZADO: ' + fleetData.updateDate;
+
+    await saveFleetDataToCloud();
+}
+
+// Salvar silenciosamente (sem atualizar data) - usado para restaurar dados iniciais
+async function saveFleetDataSilent() {
+    await saveFleetDataToCloud();
+}
+
+// Função interna para salvar na nuvem (apenas frota, sem recarregar tudo)
+async function saveFleetDataToCloud() {
+    try {
+        console.log('☁️ Salvando dados da frota na nuvem...');
+
+        const userId = window.getUserId ? window.getUserId() : null;
+        const apiUrl = window.APP_CONFIG?.API_URL;
+
+        console.log('🔑 UserID:', userId);
+        console.log('🌐 API URL:', apiUrl);
+        console.log('📊 Veículos a salvar:', fleetData.vehicles.length);
+
+        if (!userId || !apiUrl) {
+            console.error('❌ USER_ID ou API_URL não definido');
+            console.error('   getUserId:', window.getUserId);
+            console.error('   APP_CONFIG:', window.APP_CONFIG);
+            alert('Erro: usuário não identificado. Faça login novamente.');
+            return false;
+        }
+
+        // SEGURANCA: Nunca salvar frota com 0 veiculos (evita sobrescrever dados reais)
+        if (!fleetData.vehicles || fleetData.vehicles.length === 0) {
+            console.error('BLOQUEADO: Tentativa de salvar frota com 0 veiculos. Isso apagaria todos os dados!');
+            return false;
+        }
+
+        // Criar copia profunda para evitar problemas de referencia
+        const fleetToSave = JSON.parse(JSON.stringify(fleetData));
+
+        console.log('📦 Dados preparados para envio:', {
+            userId: userId,
+            vehicles: fleetToSave.vehicles.length,
+            updateDate: fleetToSave.updateDate
+        });
+
+        // Salvar diretamente apenas a frota, sem sobrescrever outros dados
+        const response = await fetch(`${apiUrl}/api/sync`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userId: userId,
+                fleet: fleetToSave
+            })
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            console.log('✅ Dados da frota salvos na nuvem com sucesso!');
+            console.log('📝 Resposta do servidor:', result);
+            return true;
+        } else {
+            const errorText = await response.text();
+            console.error('❌ Erro ao salvar dados da frota:', response.status);
+            console.error('📄 Resposta do servidor:', errorText);
+            alert('Erro ao salvar dados da frota na nuvem. Status: ' + response.status);
+            return false;
+        }
+    } catch (e) {
+        console.error('❌ Erro ao salvar frota:', e);
+        console.error('📍 Stack trace:', e.stack);
+        alert('Erro ao salvar dados da frota: ' + e.message);
+        return false;
+    }
+}
+
+// ---- Filters ----
+function populateFilters() {
+    const marcas = [...new Set(fleetData.vehicles.map(v => v.marca))].sort();
+    const seguradoras = [...new Set(fleetData.vehicles.map(v => v.seguradora).filter(s => s))].sort();
+
+    const marcaSelect = document.getElementById('marcaFilter');
+    marcaSelect.innerHTML = '<option value="">Todas</option>';
+    marcas.forEach(m => {
+        marcaSelect.innerHTML += `<option value="${m}">${m}</option>`;
+    });
+
+    const segSelect = document.getElementById('seguradoraFilter');
+    segSelect.innerHTML = '<option value="">Todas</option>';
+    seguradoras.forEach(s => {
+        segSelect.innerHTML += `<option value="${s}">${s}</option>`;
+    });
+}
+
+function applyFilters() {
+    renderVehicles();
+}
+
+function getFilteredVehicles() {
+    const search = document.getElementById('searchFilter').value.toLowerCase();
+    const marca = document.getElementById('marcaFilter').value;
+    const blindagem = document.getElementById('blindagemFilter').value;
+    const seguradora = document.getElementById('seguradoraFilter').value;
+    const revisao = document.getElementById('revisaoFilter').value;
+    const today = new Date();
+    const in30days = new Date();
+    in30days.setDate(in30days.getDate() + 30);
+
+    return fleetData.vehicles.filter((v, idx) => {
+        // Search filter
+        if (search) {
+            const searchStr = `${v.marca} ${v.modelo} ${v.placa} ${v.chassi} ${v.renavam} ${v.oficina} ${v.seguradora} ${v.observacoes}`.toLowerCase();
+            if (!searchStr.includes(search)) return false;
+        }
+
+        // Marca filter
+        if (marca && v.marca !== marca) return false;
+
+        // Blindagem filter
+        if (blindagem && v.blindagem !== blindagem) return false;
+
+        // Seguradora filter
+        if (seguradora && v.seguradora !== seguradora) return false;
+
+        // Revisão status filter
+        if (revisao) {
+            const revDate = v.proxRevisao ? new Date(v.proxRevisao + 'T00:00:00') : null;
+            if (revisao === 'vencida' && (!revDate || revDate >= today)) return false;
+            if (revisao === 'proxima' && (!revDate || revDate < today || revDate > in30days)) return false;
+            if (revisao === 'ok' && (!revDate || revDate <= in30days)) return false;
+        }
+
+        return true;
+    });
+}
+
+// ---- Rendering ----
+function renderVehicles() {
+    const tbody = document.getElementById('vehiclesTableBody');
+    const filtered = getFilteredVehicles();
+    const countEl = document.getElementById('vehicleCount');
+    countEl.textContent = `${filtered.length} de ${fleetData.vehicles.length} veículo(s)`;
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="14" style="text-align:center; padding:40px; color:#bdc3c7;"><i class="fas fa-car" style="font-size:40px; display:block; margin-bottom:10px;"></i>Nenhum veículo encontrado</td></tr>';
+        return;
+    }
+
+    const today = new Date();
+    const in30days = new Date();
+    in30days.setDate(in30days.getDate() + 30);
+
+    tbody.innerHTML = filtered.map(v => {
+        const idx = fleetData.vehicles.indexOf(v);
+        const revDate = v.proxRevisao ? new Date(v.proxRevisao + 'T00:00:00') : null;
+        let revClass = 'revisao-ok';
+        let revLabel = '';
+        if (revDate) {
+            if (revDate < today) {
+                revClass = 'revisao-vencida';
+                revLabel = ' (VENCIDA)';
+            } else if (revDate <= in30days) {
+                revClass = 'revisao-proxima';
+                revLabel = ' (PRÓXIMA)';
+            }
+        }
+
+        const kmAtual = parseKm(v.kmAtual);
+        const kmRev = parseKm(v.proxRevisaoKm);
+        let kmPercent = 0;
+        let kmColor = '#27ae60';
+        if (kmRev > 0) {
+            kmPercent = Math.min(100, (kmAtual / kmRev) * 100);
+            if (kmPercent >= 95) kmColor = '#e74c3c';
+            else if (kmPercent >= 80) kmColor = '#f39c12';
+        }
+
+        const stats = calcularEstatisticasAbastecimento(v);
+        const custoKmBadge = stats.custoPorKm > 0
+            ? `<div class="custo-km-badge">💰 R$ ${stats.custoPorKm}/km</div>`
+            : '';
+
+        return `<tr data-vehicle-index="${idx}">
+            <td>
+                <div class="marca-modelo">
+                    <span class="marca">${v.marca}</span>
+                    <span class="modelo">${v.modelo}</span>
+                    ${custoKmBadge}
+                </div>
+            </td>
+            <td>${v.ano}</td>
+            <td><strong>${v.placa}</strong></td>
+            <td style="font-size:11px;">${v.chassi || '-'}</td>
+            <td style="font-size:11px;">${v.renavam || '-'}</td>
+            <td class="${revClass}">${formatDate(v.proxRevisao)}${revLabel}</td>
+            <td>${v.proxRevisaoKm || '-'}</td>
+            <td>
+                <div class="km-bar">
+                    <span>${v.kmAtual || '-'}</span>
+                    ${kmRev > 0 ? `<div class="km-progress"><div class="km-progress-fill" style="width:${kmPercent}%; background:${kmColor};"></div></div>` : ''}
+                </div>
+            </td>
+            <td style="font-size:12px; max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(v.oficina)}">${v.oficina || '-'}</td>
+            <td>${v.blindagem === 'SIM' ? '<span class="badge badge-success">SIM</span>' : '<span class="badge badge-danger">NÃO</span>'}</td>
+            <td class="${getBlindagemRevClass(v.revBlindagem)}">${formatDate(v.revBlindagem)}</td>
+            <td><span class="badge badge-primary">${v.seguradora || '-'}</span></td>
+            <td>
+                <div class="action-btns">
+                    <button class="btn-icon view" title="Detalhes" data-action="view"><i class="fas fa-eye"></i></button>
+                    <button class="btn-icon history" title="Histórico KM" data-action="history"><i class="fas fa-history"></i></button>
+                    <button class="btn-icon edit" title="Editar" data-action="edit"><i class="fas fa-edit"></i></button>
+                    <button class="btn-icon delete" title="Excluir" data-action="delete"><i class="fas fa-trash"></i></button>
+                </div>
+            </td>
+            <td class="obs-text" title="${escapeHtml(v.observacoes)}">${v.observacoes || '-'}</td>
+        </tr>`;
+    }).join('');
+
+    // Add event delegation for action buttons
+    setupTableActions();
+}
+
+function setupTableActions() {
+    const tbody = document.getElementById('vehiclesTableBody');
+    tbody.removeEventListener('click', handleTableClick);
+    tbody.addEventListener('click', handleTableClick);
+}
+
+function handleTableClick(e) {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+
+    const action = btn.dataset.action;
+    const row = btn.closest('tr');
+    const index = parseInt(row.dataset.vehicleIndex);
+
+    if (isNaN(index)) return;
+
+    switch(action) {
+        case 'view':
+            viewVehicle(index);
+            break;
+        case 'history':
+            openHistoryModal(index);
+            break;
+        case 'edit':
+            editVehicle(index);
+            break;
+        case 'delete':
+            deleteVehicle(index);
+            break;
+    }
+}
+
+function getBlindagemRevClass(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr + 'T00:00:00');
+    const today = new Date();
+    const in30days = new Date();
+    in30days.setDate(in30days.getDate() + 30);
+    if (d < today) return 'revisao-vencida';
+    if (d <= in30days) return 'revisao-proxima';
+    return 'revisao-ok';
+}
+
+function updateStatusCards() {
+    const vehicles = fleetData.vehicles;
+    const today = new Date();
+
+    document.getElementById('totalVehicles').textContent = vehicles.length;
+    document.getElementById('totalBlindados').textContent = vehicles.filter(v => v.blindagem === 'SIM').length;
+
+    const revisaoVencida = vehicles.filter(v => {
+        if (!v.proxRevisao) return false;
+        return new Date(v.proxRevisao + 'T00:00:00') < today;
+    }).length;
+    document.getElementById('totalRevisaoVencida').textContent = revisaoVencida;
+
+    const seguradoras = [...new Set(vehicles.map(v => v.seguradora).filter(s => s))].length;
+    document.getElementById('totalSeguradoras').textContent = seguradoras;
+}
+
+// ---- Revision Alerts ----
+function buildRevisionAlerts() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const in30Days = new Date(today);
+    in30Days.setDate(in30Days.getDate() + 30);
+
+    const overdue = [];
+    const soon = [];
+
+    fleetData.vehicles.forEach(v => {
+        if (!v.proxRevisao) return;
+
+        const revisionDate = new Date(v.proxRevisao + 'T00:00:00');
+
+        if (revisionDate < today) {
+            overdue.push({ vehicle: v, revisionDate });
+        } else if (revisionDate <= in30Days) {
+            const days = Math.floor((revisionDate - today) / 86400000);
+            soon.push({ vehicle: v, revisionDate, days });
+        }
+    });
+
+    // Ordenar por data (mais urgente primeiro)
+    overdue.sort((a, b) => a.revisionDate - b.revisionDate);
+    soon.sort((a, b) => a.revisionDate - b.revisionDate);
+
+    return { overdue, soon };
+}
+
+function renderRevisionAlerts() {
+    const { overdue, soon } = buildRevisionAlerts();
+    const total = overdue.length + soon.length;
+
+    const section = document.getElementById('alertsSection');
+    const list = document.getElementById('alertsList');
+
+    if (total === 0) {
+        section.style.display = 'none';
+        return;
+    }
+
+    section.style.display = 'block';
+    let html = '';
+
+    // Revisões vencidas
+    if (overdue.length > 0) {
+        html += `<div class="alert-group-title alert-group-overdue">
+            <i class="fas fa-exclamation-triangle"></i>
+            Revisões Vencidas (${overdue.length})
+        </div>`;
+        overdue.forEach(({ vehicle, revisionDate }) => {
+            const diasAtraso = Math.floor((new Date().setHours(0,0,0,0) - revisionDate) / 86400000);
+            const atrasoLabel = diasAtraso === 0 ? 'Vence Hoje' : `${diasAtraso} dia(s) em atraso`;
+            html += `
+                <div class="alert-item alert-overdue">
+                    <div class="alert-icon overdue"><i class="fas fa-exclamation-triangle"></i></div>
+                    <div class="alert-info">
+                        <strong>${vehicle.marca} ${vehicle.modelo} — ${vehicle.placa}</strong>
+                        <small>
+                            <span class="alert-tag overdue-tag">VENCIDA</span>
+                            ${atrasoLabel} · Previsão: ${formatDate(vehicle.proxRevisao)}
+                            ${vehicle.oficina ? ' · ' + vehicle.oficina : ''}
+                        </small>
+                    </div>
+                    <div class="alert-actions">
+                        <button class="btn-alert-action" onclick="editVehicle('${vehicle.placa}')" title="Editar">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    // Revisões a vencer em 30 dias
+    if (soon.length > 0) {
+        html += `<div class="alert-group-title alert-group-soon">
+            <i class="fas fa-clock"></i>
+            Revisões Próximas (${soon.length})
+        </div>`;
+        soon.forEach(({ vehicle, revisionDate, days }) => {
+            const daysLabel = days === 0 ? 'Hoje' : days === 1 ? 'Amanhã' : `${days} dias`;
+            html += `
+                <div class="alert-item alert-soon">
+                    <div class="alert-icon soon"><i class="fas fa-clock"></i></div>
+                    <div class="alert-info">
+                        <strong>${vehicle.marca} ${vehicle.modelo} — ${vehicle.placa}</strong>
+                        <small>
+                            <span class="alert-tag soon-tag">PRÓXIMA</span>
+                            Vence em ${daysLabel} · Previsão: ${formatDate(vehicle.proxRevisao)}
+                            ${vehicle.oficina ? ' · ' + vehicle.oficina : ''}
+                        </small>
+                    </div>
+                    <div class="alert-actions">
+                        <button class="btn-alert-action" onclick="editVehicle('${vehicle.placa}')" title="Editar">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    list.innerHTML = html;
+}
+
+// ---- Helpers ----
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function parseKm(str) {
+    if (!str) return 0;
+    return parseInt(String(str).replace(/\./g, '').replace(/,/g, '')) || 0;
+}
+
+// ===== CÁLCULO DE CUSTO POR KM =====
+function calcularEstatisticasAbastecimento(vehicle) {
+    const abastecimentos = vehicle.abastecimentos || [];
+
+    if (abastecimentos.length === 0) {
+        return {
+            custoPorKm: 0,
+            totalGasto: 0,
+            kmRodados: 0,
+            totalLitros: 0,
+            consumoMedio: 0
+        };
+    }
+
+    // Ordenar por KM (crescente)
+    const sorted = [...abastecimentos].sort((a, b) =>
+        parseKm(a.kmAtual) - parseKm(b.kmAtual)
+    );
+
+    const kmInicial = parseKm(sorted[0].kmAtual);
+    const kmFinal = parseKm(vehicle.kmAtual) || parseKm(sorted[sorted.length - 1].kmAtual);
+    const kmRodados = kmFinal - kmInicial;
+
+    const totalGasto = abastecimentos.reduce((sum, a) => sum + (parseFloat(a.valor) || 0), 0);
+    const totalLitros = abastecimentos.reduce((sum, a) => sum + (parseFloat(a.litros) || 0), 0);
+
+    const custoPorKm = kmRodados > 0 ? totalGasto / kmRodados : 0;
+    const consumoMedio = totalLitros > 0 ? kmRodados / totalLitros : 0;
+
+    return {
+        custoPorKm: custoPorKm.toFixed(2),
+        totalGasto: totalGasto.toFixed(2),
+        kmRodados: kmRodados,
+        totalLitros: totalLitros.toFixed(2),
+        consumoMedio: consumoMedio.toFixed(2)
+    };
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return '-';
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
+function parseDateBR(str) {
+    // dd/mm/yyyy -> yyyy-mm-dd
+    if (!str) return '';
+    const parts = str.split('/');
+    if (parts.length !== 3) return str;
+    return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+}
+
+// ---- File Upload Handler ----
+function handleFileUpload(event, displayElementId) {
+    const file = event.target.files[0];
+    const displayElement = document.getElementById(displayElementId);
+
+    if (file) {
+        if (file.type !== 'application/pdf') {
+            alert('Por favor, selecione apenas arquivos PDF.');
+            event.target.value = '';
+            displayElement.textContent = '';
+            return;
+        }
+
+        // Display file name and size
+        const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+        displayElement.innerHTML = `<i class="fas fa-check-circle" style="color:#28a745;"></i> ${file.name} (${fileSizeMB} MB)`;
+
+        // Convert to base64
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            // Store base64 in the file input's dataset
+            event.target.dataset.base64 = e.target.result;
+            event.target.dataset.filename = file.name;
+        };
+        reader.readAsDataURL(file);
+    } else {
+        displayElement.textContent = '';
+    }
+}
+
+// ---- Vehicle Modal ----
+function openVehicleModal(vehicle, index) {
+    console.log('openVehicleModal called with:', { vehicle, index });
+
+    const modal = document.getElementById('vehicleModal');
+    console.log('Modal element found:', !!modal);
+    console.log('Modal current classes:', modal ? modal.className : 'N/A');
+
+    // Abrir modal
+    if (modal) {
+        modal.classList.add('active');
+    }
+
+    // Definir índice do veículo
+    document.getElementById('vehicleIndex').value = index !== undefined ? index : -1;
+
+    if (vehicle) {
+        // MODO EDIÇÃO - Preencher com dados do veículo
+        console.log('📝 MODO EDIÇÃO - Preenchendo campos com:', vehicle);
+
+        document.getElementById('vehicleModalTitle').innerHTML = '<i class="fas fa-edit"></i> Editar Veículo';
+
+        // Preencher campos do formulário
+        document.getElementById('vMarca').value = vehicle.marca || '';
+        document.getElementById('vModelo').value = vehicle.modelo || '';
+        document.getElementById('vAno').value = vehicle.ano || '';
+        document.getElementById('vPlaca').value = vehicle.placa || '';
+        document.getElementById('vChassi').value = vehicle.chassi || '';
+        document.getElementById('vRenavam').value = vehicle.renavam || '';
+        document.getElementById('vProxRevisao').value = vehicle.proxRevisao || '';
+        document.getElementById('vProxRevisaoKm').value = vehicle.proxRevisaoKm || '';
+        document.getElementById('vKmAtual').value = vehicle.kmAtual || '';
+        document.getElementById('vOficina').value = vehicle.oficina || '';
+        document.getElementById('vBlindagem').value = vehicle.blindagem || 'NÃO';
+        document.getElementById('vRevBlindagem').value = vehicle.revBlindagem || '';
+        document.getElementById('vSeguradora').value = vehicle.seguradora || '';
+        document.getElementById('vObservacoes').value = vehicle.observacoes || '';
+
+        console.log('✅ Campos preenchidos. Verificando valor de vMarca:', document.getElementById('vMarca').value);
+
+        // Display existing files
+        if (vehicle.documento) {
+            const docInput = document.getElementById('vDocumento');
+            docInput.dataset.base64 = vehicle.documento;
+            docInput.dataset.filename = vehicle.documentoNome || 'documento.pdf';
+            document.getElementById('documentoFileName').innerHTML = `<i class="fas fa-check-circle" style="color:#28a745;"></i> ${vehicle.documentoNome || 'documento.pdf'}`;
+        } else {
+            document.getElementById('documentoFileName').textContent = '';
+        }
+
+        // Carregar notas fiscais existentes no novo sistema
+        currentInvoices = vehicle.invoices ? [...vehicle.invoices] : [];
+
+        // Migrar dados antigos se existirem
+        if (vehicle.notasFiscais && !vehicle.invoices) {
+            currentInvoices.push({
+                id: Date.now() + '_migrated',
+                name: vehicle.notasFiscaisNome || 'nota_fiscal.pdf',
+                base64: vehicle.notasFiscais,
+                type: 'pdf',
+                observations: 'Migrado do sistema antigo',
+                uploadDate: new Date().toISOString()
+            });
+        }
+
+        renderInvoicesList();
+
+        // Carregar abastecimentos existentes
+        currentAbastecimentos = vehicle.abastecimentos ? [...vehicle.abastecimentos] : [];
+    } else {
+        // MODO NOVO - Resetar formulário
+        console.log('➕ MODO NOVO - Resetando formulário');
+
+        document.getElementById('vehicleModalTitle').innerHTML = '<i class="fas fa-car"></i> Novo Veículo';
+        document.getElementById('vehicleForm').reset();
+
+        // Limpar displays de arquivo
+        document.getElementById('documentoFileName').textContent = '';
+
+        currentInvoices = [];
+        currentAbastecimentos = [];
+        renderInvoicesList();
+    }
+}
+
+function closeVehicleModal() {
+    document.getElementById('vehicleModal').classList.remove('active');
+    currentInvoices = [];
+    currentAbastecimentos = [];
+}
+
+// ===== SISTEMA DE MÚLTIPLAS NOTAS FISCAIS =====
+
+async function addInvoiceFiles() {
+    const input = document.getElementById('vNotasFiscaisUpload');
+    const files = input.files;
+
+    if (files.length === 0) {
+        alert('Selecione pelo menos um arquivo.');
+        return;
+    }
+
+    for (let file of files) {
+        try {
+            const base64 = await fileToBase64(file);
+            const isImage = file.type.startsWith('image/');
+
+            currentInvoices.push({
+                id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                name: file.name,
+                base64: base64,
+                type: isImage ? 'image' : 'pdf',
+                observations: '',
+                uploadDate: new Date().toISOString()
+            });
+        } catch (error) {
+            console.error('Erro ao processar arquivo:', file.name, error);
+        }
+    }
+
+    // Limpar input
+    input.value = '';
+
+    // Renderizar lista
+    renderInvoicesList();
+}
+
+function renderInvoicesList() {
+    const listDiv = document.getElementById('invoicesList');
+    const contentDiv = document.getElementById('invoicesListContent');
+    const countSpan = document.getElementById('invoicesCount');
+
+    if (currentInvoices.length === 0) {
+        listDiv.style.display = 'none';
+        return;
+    }
+
+    listDiv.style.display = 'block';
+    countSpan.textContent = currentInvoices.length;
+
+    contentDiv.innerHTML = currentInvoices.map((invoice, index) => {
+        const icon = invoice.type === 'image'
+            ? '<i class="fas fa-image"></i>'
+            : '<i class="fas fa-file-pdf"></i>';
+
+        const iconClass = invoice.type === 'image' ? 'invoice-icon image' : 'invoice-icon';
+
+        const obsDisplay = invoice.observations
+            ? `<div class="invoice-obs"><strong>Obs:</strong> ${invoice.observations}</div>`
+            : '';
+
+        return `
+            <div class="invoice-item" id="invoice_${invoice.id}">
+                <div class="${iconClass}">
+                    ${icon}
+                </div>
+                <div class="invoice-info">
+                    <div class="invoice-name">${invoice.name}</div>
+                    <div class="invoice-meta">${formatInvoiceDate(invoice.uploadDate)}</div>
+                    ${obsDisplay}
+                    <textarea
+                        class="invoice-obs-input"
+                        placeholder="Digite observações sobre esta nota fiscal (ex: Valor, fornecedor, tipo de serviço...)"
+                        onchange="updateInvoiceObservation(${index}, this.value)"
+                        style="display:none;"
+                    >${invoice.observations}</textarea>
+                </div>
+                <div class="invoice-actions">
+                    <button type="button" class="btn-sm btn-info" onclick="toggleInvoiceObsInput(${index})" title="Adicionar/Editar Observações">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button type="button" class="btn-sm btn-success" onclick="viewInvoice(${index})" title="Visualizar">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button type="button" class="btn-sm btn-danger" onclick="removeInvoice(${index})" title="Remover">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function toggleInvoiceObsInput(index) {
+    const invoice = currentInvoices[index];
+    const invoiceDiv = document.getElementById(`invoice_${invoice.id}`);
+    const textarea = invoiceDiv.querySelector('.invoice-obs-input');
+    const obsDisplay = invoiceDiv.querySelector('.invoice-obs');
+
+    if (textarea.style.display === 'none') {
+        textarea.style.display = 'block';
+        if (obsDisplay) obsDisplay.style.display = 'none';
+        textarea.focus();
+    } else {
+        textarea.style.display = 'none';
+        if (invoice.observations && obsDisplay) {
+            obsDisplay.style.display = 'block';
+        }
+    }
+}
+
+function updateInvoiceObservation(index, value) {
+    currentInvoices[index].observations = value.trim();
+    renderInvoicesList();
+}
+
+function removeInvoice(index) {
+    if (confirm('Remover esta nota fiscal?')) {
+        currentInvoices.splice(index, 1);
+        renderInvoicesList();
+    }
+}
+
+function viewInvoice(index) {
+    const invoice = currentInvoices[index];
+
+    if (invoice.type === 'image') {
+        // Abrir imagem em nova aba
+        const win = window.open('', '_blank');
+        win.document.write(`
+            <html>
+                <head>
+                    <title>${invoice.name}</title>
+                    <style>
+                        body { margin: 0; background: #333; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+                        img { max-width: 100%; height: auto; }
+                    </style>
+                </head>
+                <body>
+                    <img src="${invoice.base64}" alt="${invoice.name}">
+                </body>
+            </html>
+        `);
+    } else {
+        // Abrir PDF em nova aba
+        const pdfWindow = window.open('', '_blank');
+        pdfWindow.document.write(`
+            <html>
+                <head><title>${invoice.name}</title></head>
+                <body style="margin:0;">
+                    <embed src="${invoice.base64}" type="application/pdf" width="100%" height="100%" style="height:100vh;">
+                </body>
+            </html>
+        `);
+    }
+}
+
+function downloadInvoice(index) {
+    const invoice = currentInvoices[index];
+    const link = document.createElement('a');
+    link.href = invoice.base64;
+    link.download = invoice.name;
+    link.click();
+}
+
+function toggleInvoicesList() {
+    const content = document.getElementById('invoicesListContent');
+    const btn = document.getElementById('toggleInvoicesBtn');
+
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        btn.innerHTML = '<i class="fas fa-chevron-up"></i> Recolher';
+    } else {
+        content.style.display = 'none';
+        btn.innerHTML = '<i class="fas fa-chevron-down"></i> Expandir';
+    }
+}
+
+function formatInvoiceDate(isoDate) {
+    const date = new Date(isoDate);
+    return date.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
+// ===== SISTEMA DE ABASTECIMENTOS =====
+
+function switchToAbastecimentosTab() {
+    document.querySelectorAll('.vehicle-tab').forEach(tab => tab.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+    document.getElementById('tabAbastecimentos').classList.add('active');
+    document.getElementById('contentAbastecimentos').classList.add('active');
+
+    renderAbastecimentosList();
+    renderAbastecimentosStats();
+}
+
+async function addAbastecimento() {
+    try {
+    const data = document.getElementById('abastData').value;
+    const kmAtual = document.getElementById('abastKm').value.trim();
+    const valor = document.getElementById('abastValor').value.trim();
+    const combustivel = document.getElementById('abastCombustivel').value;
+    const formaPagamento = document.getElementById('abastFormaPagamento').value;
+    const litros = document.getElementById('abastLitros').value.trim();
+    const observacoes = document.getElementById('abastObs').value.trim();
+
+    // Validações manuais (campos não usam required nativo para não conflitar com saveVehicle)
+    if (!data) { alert('Informe a data do abastecimento.'); return; }
+    if (!kmAtual) { alert('Informe o KM atual.'); return; }
+    if (!valor || isNaN(parseFloat(valor))) { alert('Informe o valor do abastecimento.'); return; }
+    if (!combustivel) { alert('Selecione o tipo de combustível.'); return; }
+    if (!formaPagamento) { alert('Selecione a forma de pagamento.'); return; }
+
+    // Validar KM maior que anterior
+    if (currentAbastecimentos.length > 0) {
+        const maxKm = Math.max(...currentAbastecimentos.map(a => parseKm(a.kmAtual)));
+        if (parseKm(kmAtual) < maxKm) {
+            alert('O KM atual não pode ser menor que abastecimentos anteriores.');
+            return;
+        }
+    }
+
+    const abastecimento = {
+        id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+        data: data,
+        kmAtual: kmAtual,
+        valor: parseFloat(valor),
+        combustivel: combustivel,
+        formaPagamento: formaPagamento,
+        litros: litros ? parseFloat(litros) : null,
+        observacoes: observacoes,
+        lancadoDespesa: false,
+        despesaId: null,
+        createdAt: new Date().toISOString()
+    };
+
+    currentAbastecimentos.push(abastecimento);
+
+    // ✅ SINCRONIZAÇÃO AUTOMÁTICA: Adicionar ao histórico de KM
+    const vehicleIndex = parseInt(document.getElementById('vehicleIndex').value);
+    if (vehicleIndex >= 0 && fleetData.vehicles[vehicleIndex]) {
+        const vehicle = fleetData.vehicles[vehicleIndex];
+
+        // Inicializar kmHistory se não existir
+        if (!vehicle.kmHistory) vehicle.kmHistory = [];
+
+        // Criar descrição para o histórico
+        const kmHistoryDesc = `Abastecimento - ${combustivel} - R$ ${parseFloat(valor).toFixed(2)}${litros ? ` - ${litros}L` : ''}${observacoes ? ` - ${observacoes}` : ''}`;
+
+        // Adicionar ao histórico de KM
+        vehicle.kmHistory.push({
+            date: data,
+            km: kmAtual,
+            desc: kmHistoryDesc
+        });
+
+        // Ordenar por data decrescente
+        vehicle.kmHistory.sort((a, b) => b.date.localeCompare(a.date));
+
+        // Atualizar KM atual do veículo para o mais recente
+        if (vehicle.kmHistory.length > 0) {
+            vehicle.kmAtual = vehicle.kmHistory[0].km;
+        }
+
+        // ✅ Sincronizar o campo visual vKmAtual com o novo KM
+        const vKmAtualEl = document.getElementById('vKmAtual');
+        if (vKmAtualEl) {
+            vKmAtualEl.value = kmAtual;
+        }
+
+        console.log('✅ Histórico de KM atualizado automaticamente:', {
+            data: data,
+            km: kmAtual,
+            desc: kmHistoryDesc
+        });
+    } else {
+        // Novo veículo (ainda não salvo): só atualiza o campo visual
+        const vKmAtualEl = document.getElementById('vKmAtual');
+        if (vKmAtualEl && (!vKmAtualEl.value || parseKm(kmAtual) > parseKm(vKmAtualEl.value))) {
+            vKmAtualEl.value = kmAtual;
+        }
+    }
+
+    // Limpar form
+    document.getElementById('abastData').value = new Date().toISOString().split('T')[0];
+    document.getElementById('abastKm').value = '';
+    document.getElementById('abastValor').value = '';
+    document.getElementById('abastLitros').value = '';
+    document.getElementById('abastObs').value = '';
+
+    renderAbastecimentosList();
+    renderAbastecimentosStats();
+
+
+    // AUTO-SAVE: Sincronizar abastecimentos com fleetData e salvar na nuvem
+    if (vehicleIndex >= 0 && fleetData.vehicles[vehicleIndex]) {
+        fleetData.vehicles[vehicleIndex].abastecimentos = [...currentAbastecimentos];
+        console.log("Auto-salvando abastecimento na nuvem...");
+        await saveFleetData();
+        console.log("Abastecimento salvo na nuvem automaticamente!");
+    }
+    showFleetToast('Abastecimento adicionado!', 'success');
+    if (window.registrarAuditoria) {
+        const vIdx = parseInt(document.getElementById('vehicleIndex').value);
+        const vPlaca = vIdx >= 0 && fleetData.vehicles[vIdx] ? fleetData.vehicles[vIdx].placa : '?';
+        registrarAuditoria('frota', 'incluir', `Abastecimento adicionado: ${vPlaca} - ${combustivel} R$ ${parseFloat(valor).toFixed(2)}`);
+    }
+    } catch(err) {
+        console.error('Erro em addAbastecimento:', err);
+        alert('Erro ao adicionar abastecimento: ' + err.message);
+    }
+}
+
+async function removeAbastecimento(index) {
+    const abast = currentAbastecimentos[index];
+
+    if (abast.lancadoDespesa) {
+        if (!confirm('Este abastecimento já foi lançado em despesas. Deseja realmente excluir?')) {
+            return;
+        }
+    }
+
+    if (confirm('Remover este abastecimento?')) {
+        currentAbastecimentos.splice(index, 1);
+        renderAbastecimentosList();
+        renderAbastecimentosStats();
+
+        // AUTO-SAVE: Sincronizar remocao na nuvem
+        var vIdx2 = parseInt(document.getElementById('vehicleIndex').value);
+        if (vIdx2 >= 0 && fleetData.vehicles[vIdx2]) {
+            fleetData.vehicles[vIdx2].abastecimentos = [...currentAbastecimentos];
+            console.log('Auto-salvando remocao de abastecimento na nuvem...');
+            await saveFleetData();
+            console.log('Remocao de abastecimento salva na nuvem!');
+        }
+    }
+}
+
+function renderAbastecimentosList() {
+    const listDiv = document.getElementById('abastecimentosList');
+
+    if (currentAbastecimentos.length === 0) {
+        listDiv.innerHTML = '<div class="no-history"><i class="fas fa-info-circle"></i> Nenhum abastecimento registrado</div>';
+        return;
+    }
+
+    // Ordenar por data decrescente
+    const sorted = [...currentAbastecimentos].sort((a, b) =>
+        new Date(b.data) - new Date(a.data)
+    );
+
+    listDiv.innerHTML = sorted.map((abast, idx) => {
+        const realIndex = currentAbastecimentos.indexOf(abast);
+        const precoPorLitro = abast.litros ? (abast.valor / abast.litros).toFixed(2) : '-';
+        const lancadoBadge = abast.lancadoDespesa
+            ? '<span class="badge-lancado"><i class="fas fa-check"></i> Lançado</span>'
+            : `<button type="button" class="btn-sm btn-success" onclick="lancarAbastecimentoEmDespesa(${realIndex})" title="Lançar em Despesas"><i class="fas fa-dollar-sign"></i> Lançar</button>`;
+
+        return `
+            <div class="abastecimento-item">
+                <div class="abast-main">
+                    <span class="abast-date">${formatDate(abast.data)}</span>
+                    <span class="abast-km">${abast.kmAtual} km</span>
+                    <span class="abast-combustivel">${abast.combustivel}</span>
+                    <span class="abast-valor">R$ ${abast.valor.toFixed(2)}</span>
+                    <span class="abast-pagamento">${abast.formaPagamento}</span>
+                </div>
+                <div class="abast-details">
+                    ${abast.litros ? `${abast.litros}L • R$ ${precoPorLitro}/L` : ''}
+                    ${abast.observacoes ? `• ${abast.observacoes}` : ''}
+                </div>
+                <div class="abast-actions">
+                    ${lancadoBadge}
+                    <button type="button" class="btn-sm btn-danger" onclick="removeAbastecimento(${realIndex})" title="Remover">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderAbastecimentosStats() {
+    const vehicleIndex = parseInt(document.getElementById('vehicleIndex').value);
+    const isEditing = vehicleIndex >= 0;
+
+    // Criar veículo temporário para cálculo
+    const tempVehicle = {
+        kmAtual: document.getElementById('vKmAtual').value || '0',
+        abastecimentos: currentAbastecimentos
+    };
+
+    const stats = calcularEstatisticasAbastecimento(tempVehicle);
+
+    document.getElementById('statCustoPorKm').textContent = `R$ ${stats.custoPorKm}`;
+    document.getElementById('statTotalGasto').textContent = `R$ ${stats.totalGasto}`;
+    document.getElementById('statKmRodados').textContent = `${stats.kmRodados} km`;
+    document.getElementById('statConsumoMedio').textContent = stats.consumoMedio > 0
+        ? `${stats.consumoMedio} km/L`
+        : '-';
+}
+
+async function lancarAbastecimentoEmDespesa(index) {
+    const abast = currentAbastecimentos[index];
+
+    if (abast.lancadoDespesa) {
+        alert('Este abastecimento já foi lançado em despesas.');
+        return;
+    }
+
+    if (!confirm('Lançar este abastecimento em despesas?')) {
+        return;
+    }
+
+    try {
+        // Pegar placa do veículo
+        const vehicleIndex = parseInt(document.getElementById('vehicleIndex').value);
+        const vehicle = fleetData.vehicles[vehicleIndex];
+        const placa = vehicle?.placa || document.getElementById('vPlaca')?.value || 'N/A';
+
+        console.log('🚗 Lançando abastecimento em despesas:', {
+            placa,
+            combustivel: abast.combustivel,
+            valor: abast.valor,
+            data: abast.data
+        });
+
+        // Criar despesa
+        const despesa = {
+            description: `Abastecimento - ${placa} - ${abast.combustivel}`,
+            amount: abast.valor,
+            category: 'Carro',
+            supplier: 'Posto de Combustível',
+            paymentMethod: abast.formaPagamento,
+            date: abast.data,
+            notes: `${abast.litros ? abast.litros + 'L • ' : ''}KM: ${abast.kmAtual}${abast.observacoes ? ' • ' + abast.observacoes : ''}`
+        };
+
+        // Verificar se a função existe
+        if (typeof window.addExpenseFromExternal !== 'function') {
+            console.error('❌ Função addExpenseFromExternal não encontrada!');
+            alert('Erro: Função de adicionar despesa não disponível.\n\nPor favor, certifique-se de que:\n1. O Dashboard foi carregado corretamente\n2. O script.js contém a função addExpenseFromExternal\n3. Recarregue a página (Ctrl+Shift+R)');
+            return;
+        }
+
+        // Adicionar despesa
+        await window.addExpenseFromExternal(despesa);
+
+        // Marcar como lançado
+        abast.lancadoDespesa = true;
+        abast.despesaId = `despesa_${Date.now()}`;
+
+        // Salvar automaticamente após lançar
+        if (vehicleIndex >= 0 && fleetData.vehicles[vehicleIndex]) {
+            fleetData.vehicles[vehicleIndex].abastecimentos = [...currentAbastecimentos];
+            await saveFleetData();
+            console.log('✅ Abastecimento marcado como lançado e salvo');
+        }
+
+        renderAbastecimentosList();
+        showFleetToast('Abastecimento lançado em despesas com sucesso!', 'success');
+
+        console.log('✅ Abastecimento lançado em despesas:', {
+            id: abast.id,
+            despesaId: abast.despesaId,
+            valor: abast.valor
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao lançar despesa:', error);
+        alert('Erro ao lançar despesa. Tente novamente.\n\nDetalhes: ' + error.message);
+    }
+}
+
+async function saveVehicle() {
+    const form = document.getElementById('vehicleForm');
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+
+    const docInput = document.getElementById('vDocumento');
+
+    const vehicle = {
+        marca: document.getElementById('vMarca').value.toUpperCase().trim(),
+        modelo: document.getElementById('vModelo').value.toUpperCase().trim(),
+        ano: document.getElementById('vAno').value.trim(),
+        placa: document.getElementById('vPlaca').value.toUpperCase().trim(),
+        chassi: document.getElementById('vChassi').value.toUpperCase().trim(),
+        renavam: document.getElementById('vRenavam').value.trim(),
+        proxRevisao: document.getElementById('vProxRevisao').value,
+        proxRevisaoKm: document.getElementById('vProxRevisaoKm').value.trim(),
+        oficina: document.getElementById('vOficina').value.trim(),
+        blindagem: document.getElementById('vBlindagem').value,
+        revBlindagem: document.getElementById('vRevBlindagem').value,
+        seguradora: document.getElementById('vSeguradora').value.toUpperCase().trim(),
+        kmAtual: document.getElementById('vKmAtual').value.trim(),
+        observacoes: document.getElementById('vObservacoes').value.trim(),
+        kmHistory: []
+    };
+
+    // Add PDF files if uploaded
+    if (docInput.dataset.base64) {
+        vehicle.documento = docInput.dataset.base64;
+        vehicle.documentoNome = docInput.dataset.filename;
+    }
+
+    // Salvar notas fiscais no novo formato
+    vehicle.invoices = currentInvoices.length > 0 ? [...currentInvoices] : [];
+
+    // Salvar abastecimentos
+    vehicle.abastecimentos = currentAbastecimentos.length > 0 ? [...currentAbastecimentos] : [];
+
+    const index = parseInt(document.getElementById('vehicleIndex').value);
+    const isEditing = index >= 0;
+
+    if (isEditing) {
+        const existing = fleetData.vehicles[index];
+
+        // Keep existing history
+        vehicle.kmHistory = existing.kmHistory || [];
+
+        // Preservar documento existente se não houve novo upload
+        if (!vehicle.documento && existing.documento) {
+            vehicle.documento = existing.documento;
+            vehicle.documentoNome = existing.documentoNome;
+        }
+
+        // Preservar abastecimentos existentes se currentAbastecimentos não foi carregado
+        if (vehicle.abastecimentos.length === 0 && existing.abastecimentos && existing.abastecimentos.length > 0) {
+            vehicle.abastecimentos = [...existing.abastecimentos];
+            console.log('⚠️ Preservando abastecimentos existentes:', existing.abastecimentos.length);
+        }
+
+        // Preservar invoices existentes se currentInvoices não foi carregado
+        if (vehicle.invoices.length === 0 && existing.invoices && existing.invoices.length > 0) {
+            vehicle.invoices = [...existing.invoices];
+            console.log('⚠️ Preservando notas fiscais existentes:', existing.invoices.length);
+        }
+
+        fleetData.vehicles[index] = vehicle;
+        console.log('✅ Veículo atualizado:', vehicle.marca, vehicle.modelo);
+    } else {
+        fleetData.vehicles.push(vehicle);
+        console.log('✅ Novo veículo adicionado:', vehicle.marca, vehicle.modelo);
+    }
+
+    await saveFleetData();
+    populateFilters();
+    renderVehicles();
+    updateStatusCards();
+    renderRevisionAlerts();
+    closeVehicleModal();
+
+    // Mostrar mensagem de sucesso
+    showFleetToast(
+        isEditing
+            ? `Veículo ${vehicle.marca} ${vehicle.modelo} atualizado com sucesso!`
+            : `Veículo ${vehicle.marca} ${vehicle.modelo} cadastrado com sucesso!`,
+        'success'
+    );
+}
+
+function editVehicle(index) {
+    console.log('🔧 editVehicle chamado com index:', index);
+    console.log('📦 fleetData.vehicles length:', fleetData.vehicles.length);
+    console.log('🚗 Veículo selecionado:', fleetData.vehicles[index]);
+
+    const vehicle = fleetData.vehicles[index];
+    if (!vehicle) {
+        console.error('❌ Veículo não encontrado no índice:', index);
+        alert('Erro: Veículo não encontrado.');
+        return;
+    }
+
+    console.log('✅ Abrindo modal com veículo:', vehicle.marca, vehicle.modelo, 'index:', index);
+    openVehicleModal(vehicle, index);
+}
+
+function deleteVehicle(index) {
+    const v = fleetData.vehicles[index];
+    if (confirm(`Deseja excluir o veículo ${v.marca} ${v.modelo} (${v.placa})?`)) {
+        fleetData.vehicles.splice(index, 1);
+        saveFleetData();
+        populateFilters();
+        renderVehicles();
+        updateStatusCards();
+        renderRevisionAlerts();
+    }
+}
+
+// ---- Detail Modal ----
+function viewVehicle(index) {
+    const v = fleetData.vehicles[index];
+    document.getElementById('detailModalTitle').innerHTML = `<i class="fas fa-car"></i> ${v.marca} ${v.modelo}`;
+
+    const today = new Date();
+    const revDate = v.proxRevisao ? new Date(v.proxRevisao + 'T00:00:00') : null;
+    let revStatus = '<span class="badge badge-info">-</span>';
+    if (revDate) {
+        if (revDate < today) revStatus = '<span class="badge badge-danger">VENCIDA</span>';
+        else {
+            const days = Math.ceil((revDate - today) / (1000 * 60 * 60 * 24));
+            if (days <= 30) revStatus = `<span class="badge badge-warning">EM ${days} DIAS</span>`;
+            else revStatus = `<span class="badge badge-success">EM DIA (${days} dias)</span>`;
+        }
+    }
+
+    const kmAtual = parseKm(v.kmAtual);
+    const kmRev = parseKm(v.proxRevisaoKm);
+    let kmStatus = '';
+    if (kmRev > 0 && kmAtual > 0) {
+        const remaining = kmRev - kmAtual;
+        if (remaining <= 0) kmStatus = '<span class="badge badge-danger">KM EXCEDIDO</span>';
+        else if (remaining <= 1000) kmStatus = `<span class="badge badge-warning">FALTAM ${remaining.toLocaleString('pt-BR')} KM</span>`;
+        else kmStatus = `<span class="badge badge-success">FALTAM ${remaining.toLocaleString('pt-BR')} KM</span>`;
+    }
+
+    document.getElementById('detailContent').innerHTML = `
+        <div class="detail-item">
+            <span class="detail-label">Marca</span>
+            <span class="detail-value">${v.marca}</span>
+        </div>
+        <div class="detail-item">
+            <span class="detail-label">Modelo</span>
+            <span class="detail-value">${v.modelo}</span>
+        </div>
+        <div class="detail-item">
+            <span class="detail-label">Ano</span>
+            <span class="detail-value">${v.ano}</span>
+        </div>
+        <div class="detail-item">
+            <span class="detail-label">Placa</span>
+            <span class="detail-value">${v.placa}</span>
+        </div>
+        <div class="detail-item">
+            <span class="detail-label">Chassi</span>
+            <span class="detail-value">${v.chassi || '-'}</span>
+        </div>
+        <div class="detail-item">
+            <span class="detail-label">Renavam</span>
+            <span class="detail-value">${v.renavam || '-'}</span>
+        </div>
+        <div class="detail-item">
+            <span class="detail-label">Próxima Revisão</span>
+            <span class="detail-value">${formatDate(v.proxRevisao)} ${revStatus}</span>
+        </div>
+        <div class="detail-item">
+            <span class="detail-label">Revisão KM</span>
+            <span class="detail-value">${v.proxRevisaoKm || '-'} ${kmStatus}</span>
+        </div>
+        <div class="detail-item">
+            <span class="detail-label">KM Atual</span>
+            <span class="detail-value">${v.kmAtual || '-'}</span>
+        </div>
+        <div class="detail-item">
+            <span class="detail-label">Oficina</span>
+            <span class="detail-value">${v.oficina || '-'}</span>
+        </div>
+        <div class="detail-item">
+            <span class="detail-label">Blindagem</span>
+            <span class="detail-value">${v.blindagem === 'SIM' ? '<span class="badge badge-success">SIM</span>' : '<span class="badge badge-danger">NÃO</span>'}</span>
+        </div>
+        <div class="detail-item">
+            <span class="detail-label">Revisão Blindagem</span>
+            <span class="detail-value">${formatDate(v.revBlindagem)}</span>
+        </div>
+        <div class="detail-item">
+            <span class="detail-label">Seguradora</span>
+            <span class="detail-value">${v.seguradora || '-'}</span>
+        </div>
+        <div class="detail-item detail-full">
+            <span class="detail-label">Observações</span>
+            <span class="detail-value">${v.observacoes || '-'}</span>
+        </div>
+        ${v.documento ? `
+        <div class="detail-item">
+            <span class="detail-label"><i class="fas fa-file-pdf"></i> Documento do Veículo</span>
+            <span class="detail-value">
+                <button class="btn btn-sm btn-primary" onclick="downloadPDF('${escapeHtml(v.documento)}', '${escapeHtml(v.documentoNome || 'documento.pdf')}')">
+                    <i class="fas fa-download"></i> Baixar
+                </button>
+                <button class="btn btn-sm btn-secondary" onclick="viewPDF('${escapeHtml(v.documento)}')">
+                    <i class="fas fa-eye"></i> Visualizar
+                </button>
+            </span>
+        </div>` : ''}
+        ${renderInvoicesDetail(v)}
+    `;
+
+    document.getElementById('detailModal').classList.add('active');
+}
+
+function renderInvoicesDetail(vehicle) {
+    // Renderizar notas fiscais no formato novo
+    if (vehicle.invoices && vehicle.invoices.length > 0) {
+        const invoicesHtml = vehicle.invoices.map((invoice, idx) => {
+            const icon = invoice.type === 'image' ? '<i class="fas fa-image"></i>' : '<i class="fas fa-file-pdf"></i>';
+            const iconColor = invoice.type === 'image' ? '#e74c3c' : '#3498db';
+
+            const obsHtml = invoice.observations
+                ? `<div style="font-size:13px;color:#666;margin-top:5px;padding:8px;background:#f8f9fa;border-radius:4px;border-left:3px solid ${iconColor};">
+                     <strong>Obs:</strong> ${invoice.observations}
+                   </div>`
+                : '';
+
+            return `
+                <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;padding:12px;margin-bottom:10px;">
+                    <div style="display:flex;align-items:start;gap:10px;">
+                        <div style="width:35px;height:35px;background:${iconColor};border-radius:6px;display:flex;align-items:center;justify-content:center;color:white;font-size:16px;flex-shrink:0;">
+                            ${icon}
+                        </div>
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-weight:600;color:#2c3e50;margin-bottom:5px;word-break:break-word;">${invoice.name}</div>
+                            <div style="font-size:12px;color:#999;">${formatInvoiceDate(invoice.uploadDate)}</div>
+                            ${obsHtml}
+                        </div>
+                        <div style="display:flex;gap:5px;flex-direction:column;">
+                            <button class="btn-sm btn-success" onclick="viewInvoiceFromDetail('${escapeHtml(invoice.base64)}', '${invoice.type}', '${escapeHtml(invoice.name)}')">
+                                <i class="fas fa-eye"></i> Ver
+                            </button>
+                            <button class="btn-sm btn-info" onclick="downloadInvoiceFromDetail('${escapeHtml(invoice.base64)}', '${escapeHtml(invoice.name)}')">
+                                <i class="fas fa-download"></i> Baixar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        return `
+            <div class="detail-item detail-full">
+                <span class="detail-label"><i class="fas fa-file-invoice"></i> Notas Fiscais / Documentos (${vehicle.invoices.length})</span>
+                <div class="detail-value" style="width:100%;">
+                    ${invoicesHtml}
+                </div>
+            </div>
+        `;
+    }
+
+    // Compatibilidade com sistema antigo
+    if (vehicle.notasFiscais) {
+        return `
+            <div class="detail-item">
+                <span class="detail-label"><i class="fas fa-file-invoice"></i> Notas Fiscais (Sistema Antigo)</span>
+                <span class="detail-value">
+                    <button class="btn btn-sm btn-primary" onclick="downloadPDF('${escapeHtml(vehicle.notasFiscais)}', '${escapeHtml(vehicle.notasFiscaisNome || 'notas-fiscais.pdf')}')">
+                        <i class="fas fa-download"></i> Baixar
+                    </button>
+                    <button class="btn btn-sm btn-secondary" onclick="viewPDF('${escapeHtml(vehicle.notasFiscais)}')">
+                        <i class="fas fa-eye"></i> Visualizar
+                    </button>
+                </span>
+            </div>
+        `;
+    }
+
+    return '';
+}
+
+function viewInvoiceFromDetail(base64, type, name) {
+    if (type === 'image') {
+        const win = window.open('', '_blank');
+        win.document.write(`
+            <html>
+                <head>
+                    <title>${name}</title>
+                    <style>
+                        body { margin: 0; background: #333; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+                        img { max-width: 100%; height: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+                    </style>
+                </head>
+                <body>
+                    <img src="${base64}" alt="${name}">
+                </body>
+            </html>
+        `);
+    } else {
+        const pdfWindow = window.open('', '_blank');
+        pdfWindow.document.write(`
+            <html>
+                <head><title>${name}</title></head>
+                <body style="margin:0;">
+                    <embed src="${base64}" type="application/pdf" width="100%" height="100%" style="height:100vh;">
+                </body>
+            </html>
+        `);
+    }
+}
+
+function downloadInvoiceFromDetail(base64, name) {
+    const link = document.createElement('a');
+    link.href = base64;
+    link.download = name;
+    link.click();
+}
+
+function closeDetailModal() {
+    document.getElementById('detailModal').classList.remove('active');
+}
+
+// ---- KM History Modal ----
+function openHistoryModal(index) {
+    currentHistoryIndex = index;
+    const v = fleetData.vehicles[index];
+    document.getElementById('historyModalTitle').innerHTML = `<i class="fas fa-history"></i> Histórico KM - ${v.marca} ${v.modelo} (${v.placa})`;
+
+    // Set today's date as default
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('histDate').value = today;
+    document.getElementById('histKm').value = '';
+    document.getElementById('histDesc').value = '';
+
+    renderHistory();
+    document.getElementById('historyModal').classList.add('active');
+}
+
+function closeHistoryModal() {
+    document.getElementById('historyModal').classList.remove('active');
+    currentHistoryIndex = -1;
+}
+
+async function addKmHistory() {
+    if (currentHistoryIndex < 0) {
+        console.error('❌ currentHistoryIndex inválido:', currentHistoryIndex);
+        alert('Erro: veículo não identificado.');
+        return;
+    }
+
+    const date = document.getElementById('histDate').value;
+    const km = document.getElementById('histKm').value.trim();
+    const desc = document.getElementById('histDesc').value.trim();
+
+    console.log('📝 Adicionando histórico KM:', { date, km, desc, currentHistoryIndex });
+
+    if (!date || !km) {
+        alert('Preencha a data e o KM.');
+        return;
+    }
+
+    const v = fleetData.vehicles[currentHistoryIndex];
+    if (!v) {
+        console.error('❌ Veículo não encontrado no índice:', currentHistoryIndex);
+        alert('Erro: veículo não encontrado.');
+        return;
+    }
+
+    if (!v.kmHistory) v.kmHistory = [];
+
+    v.kmHistory.push({ date, km, desc });
+    console.log('✅ Histórico adicionado ao veículo:', v.marca, v.modelo);
+
+    // Sort descending by date
+    v.kmHistory.sort((a, b) => b.date.localeCompare(a.date));
+
+    // Update current KM to the latest entry
+    if (v.kmHistory.length > 0) {
+        v.kmAtual = v.kmHistory[0].km;
+        console.log('✅ KM atual atualizado para:', v.kmAtual);
+    }
+
+    await saveFleetData();
+    console.log('✅ Dados salvos na nuvem');
+
+    renderHistory();
+    renderVehicles();
+    updateStatusCards();
+    renderRevisionAlerts();
+
+    // Clear inputs
+    document.getElementById('histKm').value = '';
+    document.getElementById('histDesc').value = '';
+
+    // Mostrar mensagem de sucesso
+    showFleetToast('Histórico de KM adicionado com sucesso!', 'success');
+}
+
+function deleteKmHistory(histIndex) {
+    if (currentHistoryIndex < 0) return;
+    const v = fleetData.vehicles[currentHistoryIndex];
+    if (confirm('Remover este registro de histórico?')) {
+        v.kmHistory.splice(histIndex, 1);
+        saveFleetData();
+        renderHistory();
+    }
+}
+
+function renderHistory() {
+    const list = document.getElementById('historyList');
+    if (currentHistoryIndex < 0) return;
+
+    const v = fleetData.vehicles[currentHistoryIndex];
+    const history = v.kmHistory || [];
+
+    if (history.length === 0) {
+        list.innerHTML = '<div class="no-history"><i class="fas fa-info-circle"></i> Nenhum registro de histórico</div>';
+        return;
+    }
+
+    list.innerHTML = history.map((h, i) => `
+        <div class="history-item">
+            <span class="history-date">${formatDate(h.date)}</span>
+            <span class="history-desc">${h.desc || '-'}</span>
+            <span class="history-km">${h.km} km</span>
+            <button class="btn-icon delete" data-hist-index="${i}" title="Remover" style="margin-left:10px;"><i class="fas fa-times"></i></button>
+        </div>
+    `).join('');
+
+    // Add event listeners for delete buttons
+    list.querySelectorAll('button[data-hist-index]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const histIndex = parseInt(this.dataset.histIndex);
+            deleteKmHistory(histIndex);
+        });
+    });
+}
+
+// ---- PDF Functions ----
+function downloadPDF(base64Data, filename) {
+    const link = document.createElement('a');
+    link.href = base64Data;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function viewPDF(base64Data) {
+    const newWindow = window.open();
+    if (newWindow) {
+        newWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Visualizar PDF</title>
+                <style>
+                    body { margin: 0; padding: 0; overflow: hidden; }
+                    iframe { border: none; width: 100%; height: 100vh; }
+                </style>
+            </head>
+            <body>
+                <iframe src="${base64Data}"></iframe>
+            </body>
+            </html>
+        `);
+    } else {
+        alert('Por favor, permita pop-ups para visualizar o PDF.');
+    }
+}
+
+// ---- Export ----
+function exportFleet() {
+    const vehicles = getFilteredVehicles();
+    const headers = ['Marca', 'Modelo', 'Ano', 'Placa', 'Chassi', 'Renavam', 'Próxima Revisão', 'Revisão KM', 'KM Atual', 'Oficina', 'Blindagem', 'Rev. Blindagem', 'Seguradora', 'Observações'];
+
+    let csv = '\uFEFF'; // BOM for Excel UTF-8
+    csv += headers.join(';') + '\n';
+
+    vehicles.forEach(v => {
+        csv += [
+            v.marca,
+            v.modelo,
+            v.ano,
+            v.placa,
+            v.chassi,
+            v.renavam,
+            formatDate(v.proxRevisao),
+            v.proxRevisaoKm,
+            v.kmAtual,
+            `"${(v.oficina || '').replace(/"/g, '""')}"`,
+            v.blindagem,
+            formatDate(v.revBlindagem),
+            v.seguradora,
+            `"${(v.observacoes || '').replace(/"/g, '""')}"`
+        ].join(';') + '\n';
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `frota_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+// ---- Close modals on overlay click ----
+document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('modal-overlay')) {
+        e.target.classList.remove('active');
+    }
+});
+
+// ---- Close modals on Escape key ----
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        document.querySelectorAll('.modal-overlay.active').forEach(m => m.classList.remove('active'));
+    }
+});
+
+// ===== TOAST NOTIFICATIONS =====
+function showFleetToast(message, type = 'success') {
+    // Remove toast anterior se existir
+    const existingToast = document.getElementById('fleetToast');
+    if (existingToast) existingToast.remove();
+
+    // Criar toast
+    const toast = document.createElement('div');
+    toast.id = 'fleetToast';
+    toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 15px 20px;
+        background: ${type === 'success' ? '#27ae60' : type === 'error' ? '#e74c3c' : '#f39c12'};
+        color: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        z-index: 10000;
+        font-size: 14px;
+        font-weight: 500;
+        max-width: 350px;
+        animation: slideInRight 0.3s ease-out;
+    `;
+
+    const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : '⚠️';
+    toast.innerHTML = `${icon} ${message} <button onclick="this.parentElement.remove()" style="background:none;border:none;color:inherit;font-size:18px;cursor:pointer;margin-left:8px;padding:4px;">&times;</button>`;
+
+    document.body.appendChild(toast);
+
+    // Auto-remover após 5 segundos
+    setTimeout(() => {
+        if (toast.parentElement) {
+            toast.style.animation = 'slideOutRight 0.3s ease-in';
+            setTimeout(() => { if (toast.parentElement) toast.remove(); }, 300);
+        }
+    }, 5000);
+}
+
+// Adicionar estilos de animação
+if (!document.getElementById('fleetToastStyles')) {
+    const style = document.createElement('style');
+    style.id = 'fleetToastStyles';
+    style.textContent = `
+        @keyframes slideInRight {
+            from { transform: translateX(400px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes slideOutRight {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(400px); opacity: 0; }
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+// Export PDF functions to window for onclick handlers
+window.downloadPDF = downloadPDF;
+window.viewPDF = viewPDF;
+
+console.log('Frota.js loaded successfully');

@@ -1,0 +1,461 @@
+// auth.js — Sistema de Autenticacao Casa DW
+// v5.0 — Autenticacao JWT via API + Permissoes granulares
+// Atualizado em 23/04/2026
+
+document.addEventListener('DOMContentLoaded', function () {
+    checkAuthentication();
+    var loginForm = document.getElementById('loginForm');
+    if (loginForm) loginForm.addEventListener('submit', handleLogin);
+    var logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) logoutBtn.addEventListener('click', logout);
+});
+
+// ===== GERENCIAMENTO DE TOKEN JWT =====
+function getAuthToken() {
+    return sessionStorage.getItem('authToken') || localStorage.getItem('authToken') || null;
+}
+
+function setAuthToken(token) {
+    sessionStorage.setItem('authToken', token);
+    localStorage.setItem('authToken', token);
+}
+
+function clearAuthToken() {
+    sessionStorage.removeItem('authToken');
+    localStorage.removeItem('authToken');
+}
+
+// Header de autorizacao para todas as requisicoes
+function getAuthHeaders() {
+    var token = getAuthToken();
+    var headers = { 'Content-Type': 'application/json' };
+    if (token) {
+        headers['Authorization'] = 'Bearer ' + token;
+    }
+    return headers;
+}
+
+// Expor globalmente para uso em cloud-storage.js, frota.js, etc.
+window.getAuthToken = getAuthToken;
+window.getAuthHeaders = getAuthHeaders;
+
+// ===== PERMISSOES GRANULARES =====
+function getDefaultPermissions(role) {
+    var full = { visualizar: true, incluir: true, editar: true, excluir: true };
+    var view = { visualizar: true, incluir: false, editar: false, excluir: false };
+    var none = { visualizar: false, incluir: false, editar: false, excluir: false };
+    if (role === 'admin') {
+        return { dashboard: full, frota: full, manutencoes: full, relatorios: full, parametros: full };
+    }
+    return { dashboard: view, frota: view, manutencoes: view, relatorios: view, parametros: none };
+}
+
+function perm(modulo, acao) {
+    var user = financialData.currentUser;
+    if (!user) return false;
+    if (user.role === 'admin' && !user.permissions) return true;
+    var perms = user.permissions || getDefaultPermissions(user.role);
+    var mod = perms[modulo];
+    if (!mod) return false;
+    return mod[acao] === true;
+}
+
+window.perm = perm;
+window.getDefaultPermissions = getDefaultPermissions;
+
+// ===== VERIFICAR AUTENTICACAO =====
+async function checkAuthentication() {
+    var token = getAuthToken();
+    var stored = sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser');
+
+    if (!token || !stored) {
+        clearAuthToken();
+        showLoginPage();
+        return;
+    }
+
+    try {
+        var user = JSON.parse(stored);
+
+        // Verificar se o token ainda eh valido junto ao servidor
+        var API_URL = window.APP_CONFIG ? window.APP_CONFIG.API_URL : '';
+        if (API_URL) {
+            try {
+                var response = await fetch(API_URL + '/api/auth/verify', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+
+                if (response.ok) {
+                    var data = await response.json();
+                    // Renovar token
+                    if (data.token) {
+                        setAuthToken(data.token);
+                    }
+                    // Atualizar dados do usuario se necessario
+                    if (data.user) {
+                        user = {
+                            userId: data.user.username,
+                            username: data.user.username,
+                            name: data.user.name,
+                            role: data.user.role || 'normal',
+                            permissions: data.user.permissions || null
+                        };
+                        sessionStorage.setItem('currentUser', JSON.stringify(user));
+                        localStorage.setItem('currentUser', JSON.stringify(user));
+                    }
+                } else if (response.status === 401) {
+                    // Token expirado ou invalido
+                    console.log('Token expirado. Redirecionando para login...');
+                    clearAuthToken();
+                    sessionStorage.removeItem('currentUser');
+                    localStorage.removeItem('currentUser');
+                    showLoginPage();
+                    return;
+                }
+            } catch (fetchErr) {
+                // Erro de rede — manter sessao local (modo offline gracioso)
+                console.warn('Nao foi possivel verificar token:', fetchErr.message);
+            }
+        }
+
+        financialData.currentUser = user;
+        if (window.setCloudUserId) window.setCloudUserId(user.username);
+        showMainApp();
+        await carregarDadosEInicializar();
+    } catch(e) {
+        clearAuthToken();
+        sessionStorage.removeItem('currentUser');
+        localStorage.removeItem('currentUser');
+        showLoginPage();
+    }
+}
+
+async function carregarDadosEInicializar() {
+    showPageLoading();
+    try {
+        if (window.loadFromLocalStorage) await window.loadFromLocalStorage();
+        updateUIForUserRole();
+        if (window.populateSelects) window.populateSelects();
+        if (window.renderCurrentMonth) window.renderCurrentMonth();
+        if (window.initializeCharts) window.initializeCharts();
+    } catch(error) {
+        console.error('Erro ao carregar dados:', error);
+        updateUIForUserRole();
+    } finally {
+        hidePageLoading();
+    }
+}
+
+function showPageLoading() {
+    if (document.getElementById('pageLoadingOverlay')) return;
+    var overlay = document.createElement('div');
+    overlay.id = 'pageLoadingOverlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#fff;';
+    overlay.innerHTML = '<i class="fas fa-spinner fa-spin fa-3x"></i><p style="margin-top:16px;font-size:18px;">Carregando dados...</p>';
+    document.body.appendChild(overlay);
+}
+
+function hidePageLoading() {
+    var overlay = document.getElementById('pageLoadingOverlay');
+    if (overlay) overlay.remove();
+}
+
+function showLoginPage() {
+    var main = document.getElementById('mainApp');
+    var login = document.getElementById('loginPage');
+    if (main) main.style.display = 'none';
+    if (login) login.style.display = 'flex';
+}
+
+function showMainApp() {
+    var main = document.getElementById('mainApp');
+    var login = document.getElementById('loginPage');
+    if (login) login.style.display = 'none';
+    if (main) main.style.display = 'block';
+    updateUserDisplay();
+}
+
+function updateUserDisplay() {
+    var userInfo = document.getElementById('userInfo');
+    if (!userInfo || !financialData.currentUser) return;
+    var roleName = financialData.currentUser.role === 'admin' ? 'Admin' : 'Personalizado';
+    if (financialData.currentUser.permissions) roleName = 'Personalizado';
+    if (financialData.currentUser.role === 'admin' && !financialData.currentUser.permissions) roleName = 'Admin';
+    userInfo.innerHTML =
+        '<span class="user-name"><i class="fas fa-user-circle"></i> ' + financialData.currentUser.name +
+        ' <span class="user-role">(' + roleName + ')</span></span>' +
+        '<button class="btn btn-secondary btn-sm" onclick="logout()">' +
+        '<i class="fas fa-sign-out-alt"></i> Sair</button>';
+}
+
+// ===== LOGIN VIA API (JWT) =====
+async function handleLogin(event) {
+    if (event) event.preventDefault();
+    var usernameEl = document.getElementById('loginUsername');
+    var passwordEl = document.getElementById('loginPassword');
+    if (!usernameEl || !passwordEl) return;
+    var username = usernameEl.value.trim();
+    var password = String(passwordEl.value).trim();
+    if (!username || !password) { alert('Preencha usuario e senha.'); return false; }
+
+    var API_URL = window.APP_CONFIG ? window.APP_CONFIG.API_URL : '';
+
+    if (!API_URL) {
+        alert('Erro: API nao configurada.');
+        return false;
+    }
+
+    // Mostrar loading no botao de login
+    var loginBtn = document.querySelector('#loginForm button[type="submit"], #loginForm input[type="submit"]');
+    var originalBtnText = '';
+    if (loginBtn) {
+        originalBtnText = loginBtn.innerHTML || loginBtn.value;
+        if (loginBtn.innerHTML !== undefined) {
+            loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Entrando...';
+        }
+        loginBtn.disabled = true;
+    }
+
+    try {
+        var response = await fetch(API_URL + '/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username, password: password })
+        });
+
+        var data = await response.json();
+
+        if (!response.ok || !data.success) {
+            var errorMsg = data.error || 'Usuario ou senha incorretos.';
+            alert(errorMsg);
+
+            // Registrar tentativa de login falha localmente
+            if (window.auditoria) {
+                setTimeout(function() { window.auditoria.login(username, false); }, 100);
+            }
+
+            return false;
+        }
+
+        // Login bem-sucedido!
+        // Salvar token JWT
+        setAuthToken(data.token);
+
+        // Salvar sessao do usuario
+        var userSession = {
+            userId:      data.user.username,
+            username:    data.user.username,
+            name:        data.user.name,
+            role:        data.user.role || 'normal',
+            permissions: data.user.permissions || null
+        };
+
+        sessionStorage.setItem('currentUser', JSON.stringify(userSession));
+        localStorage.setItem('currentUser', JSON.stringify(userSession));
+        financialData.currentUser = userSession;
+        if (window.setCloudUserId) window.setCloudUserId(data.user.username);
+
+        document.getElementById('loginForm').reset();
+        showMainApp();
+        await carregarDadosEInicializar();
+        resetSessionTimeout(); // Iniciar timeout de sessao
+        console.log('Login OK: ' + data.user.name + ' | role: ' + data.user.role);
+
+        // Registrar login na auditoria (ja registrado pelo backend, mas manter local)
+        if (window.auditoria) {
+            setTimeout(function() { window.auditoria.login(data.user.username, true); }, 500);
+        }
+
+        return true;
+
+    } catch (err) {
+        console.error('Erro no login:', err);
+        alert('Erro ao conectar com o servidor. Verifique sua conexao.');
+        return false;
+    } finally {
+        // Restaurar botao
+        if (loginBtn) {
+            if (loginBtn.innerHTML !== undefined && originalBtnText) {
+                loginBtn.innerHTML = originalBtnText;
+            }
+            loginBtn.disabled = false;
+        }
+    }
+}
+
+function logout() {
+    if (confirm('Deseja realmente sair?')) {
+        forceLogout('manual');
+    }
+}
+
+function forceLogout(reason) {
+    // Registrar logout na auditoria
+    if (window.auditoria && financialData.currentUser) {
+        window.auditoria.logout();
+    }
+    clearSessionTimeout();
+    clearAuthToken();
+    sessionStorage.removeItem('currentUser');
+    localStorage.removeItem('currentUser');
+    financialData.currentUser = null;
+    showLoginPage();
+    if (reason === 'timeout') {
+        setTimeout(function() { alert('Sua sessao expirou por inatividade. Faca login novamente.'); }, 300);
+    }
+}
+
+// ===== TIMEOUT DE SESSAO (30 minutos) =====
+var SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutos
+var SESSION_WARNING = 25 * 60 * 1000; // Aviso em 25 minutos
+var sessionTimeoutId = null;
+var sessionWarningId = null;
+var sessionWarningShown = false;
+
+function resetSessionTimeout() {
+    clearSessionTimeout();
+    if (!financialData.currentUser) return;
+    sessionWarningShown = false;
+    sessionWarningId = setTimeout(function() {
+        if (!financialData.currentUser) return;
+        sessionWarningShown = true;
+        var continuar = confirm('Sua sessao expira em 5 minutos por inatividade. Deseja continuar logado?');
+        if (continuar) {
+            resetSessionTimeout();
+        }
+    }, SESSION_WARNING);
+    sessionTimeoutId = setTimeout(function() {
+        if (financialData.currentUser) {
+            forceLogout('timeout');
+        }
+    }, SESSION_TIMEOUT);
+}
+
+function clearSessionTimeout() {
+    if (sessionTimeoutId) { clearTimeout(sessionTimeoutId); sessionTimeoutId = null; }
+    if (sessionWarningId) { clearTimeout(sessionWarningId); sessionWarningId = null; }
+}
+
+// Eventos de atividade do usuario resetam o timer
+['click', 'keydown', 'scroll', 'touchstart'].forEach(function(evt) {
+    document.addEventListener(evt, function() {
+        if (financialData.currentUser && !sessionWarningShown) {
+            resetSessionTimeout();
+        }
+    }, { passive: true });
+});
+
+function isAdmin() {
+    return !!(financialData.currentUser && financialData.currentUser.role === 'admin');
+}
+
+function checkAdminPermission() {
+    if (!isAdmin()) { alert('Apenas administradores podem realizar esta acao!'); return false; }
+    return true;
+}
+
+function updateUIForUserRole() {
+    var btns = {
+        addExpenseBtn: perm('dashboard', 'incluir'),
+        addIncomeBtn:  perm('dashboard', 'incluir'),
+        saveNotesBtn:  perm('dashboard', 'editar'),
+        settingsBtn:   perm('parametros', 'visualizar')
+    };
+    Object.entries(btns).forEach(function(entry) {
+        var id = entry[0], allowed = entry[1];
+        var btn = document.getElementById(id);
+        if (!btn) return;
+        btn.disabled = !allowed;
+        btn.style.opacity = allowed ? '1' : '0.4';
+        btn.style.cursor = allowed ? 'pointer' : 'not-allowed';
+        btn.title = allowed ? '' : 'Sem permissao para esta acao';
+    });
+
+    var styleId = 'userRoleStyles';
+    var existing = document.getElementById(styleId);
+    var hideActions = !perm('dashboard', 'editar') && !perm('dashboard', 'excluir');
+    if (hideActions) {
+        if (!existing) {
+            var style = document.createElement('style');
+            style.id = styleId;
+            style.textContent = '.action-buttons{display:none!important}.data-table th:last-child,.data-table td:last-child{display:none!important}';
+            document.head.appendChild(style);
+        }
+    } else {
+        if (existing) existing.remove();
+    }
+
+    // Mostrar/ocultar aba Auditoria (apenas admin)
+    var auditBtn = document.getElementById('auditTabBtn');
+    if (auditBtn) {
+        auditBtn.style.display = isAdmin() ? '' : 'none';
+    }
+}
+
+// ===== TIMEOUT DE SESSAO =====
+var sessionTimeoutId = null;
+var SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutos
+var SESSION_WARNING_MS = 25 * 60 * 1000; // Aviso em 25 minutos
+
+function resetSessionTimeout() {
+    if (sessionTimeoutId) clearTimeout(sessionTimeoutId);
+
+    // Aviso 5 minutos antes de expirar
+    sessionTimeoutId = setTimeout(function() {
+        if (financialData.currentUser) {
+            var continuar = confirm('Sua sessao expirara em 5 minutos por inatividade.\n\nDeseja continuar logado?');
+            if (continuar) {
+                resetSessionTimeout();
+                // Renovar token
+                var token = getAuthToken();
+                var API_URL = window.APP_CONFIG ? window.APP_CONFIG.API_URL : '';
+                if (token && API_URL) {
+                    fetch(API_URL + '/api/auth/verify', {
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    }).then(function(r) { return r.json(); }).then(function(data) {
+                        if (data.token) setAuthToken(data.token);
+                    }).catch(function() {});
+                }
+            } else {
+                // Logout automatico
+                clearAuthToken();
+                sessionStorage.removeItem('currentUser');
+                localStorage.removeItem('currentUser');
+                financialData.currentUser = null;
+                showLoginPage();
+                alert('Sessao encerrada por inatividade.');
+            }
+        }
+    }, SESSION_WARNING_MS);
+}
+
+// Detectar atividade do usuario
+['click', 'keydown', 'mousemove', 'scroll', 'touchstart'].forEach(function(evt) {
+    document.addEventListener(evt, function() {
+        if (financialData.currentUser) {
+            resetSessionTimeout();
+        }
+    }, { passive: true });
+});
+
+function checkAuth() {
+    var stored = sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser');
+    var token = getAuthToken();
+    if (stored && token && financialData.currentUser === null) {
+        try { financialData.currentUser = JSON.parse(stored); } catch(e) {}
+    }
+    return !!(stored && token);
+}
+
+function getCurrentUser() {
+    var s = sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser');
+    return s ? JSON.parse(s) : null;
+}
+
+window.checkAuth = checkAuth;
+window.handleLogin = handleLogin;
+window.logout = logout;
+window.getCurrentUser = getCurrentUser;
+window.isAdmin = isAdmin;
+window.checkAdminPermission = checkAdminPermission;
+window.updateUIForUserRole = updateUIForUserRole;
